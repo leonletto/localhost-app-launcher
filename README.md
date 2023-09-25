@@ -1,6 +1,6 @@
 # localhost-app-launcher
 
-A system utility for Streamlined Application Launching from Workspace ONE Hub.
+A system utility for Streamlined Application Launching from Workspace ONE Hub and teh Workspace ONE Access App Catalog.
 
 ## Table of Contents
 
@@ -24,6 +24,7 @@ Workspace ONE Hub centralizes enterprise applications. LHLauncher expands its ca
 - **Process Verification**: Ensures the application's process is active.
 - **Retries**: Automatically retries if the application doesn't start.
 - **Logging**: Includes a logging feature for easier troubleshooting.
+- **Security**: Uses a certificate published by you, which you configure for trust, so that all interactions are via SSL using your trusted certificates. It is hardcoded to listen only on 127.0.0.1.
 
 ## Usage
 
