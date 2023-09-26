@@ -1,6 +1,6 @@
 # localhost-app-launcher
 
-A system utility for Streamlined Application Launching from Workspace ONE Hub and teh Workspace ONE Access App Catalog.
+A system utility for Streamlined Application Launching from Workspace ONE Hub and the Workspace ONE Access App Catalog.
 
 ## Table of Contents
 

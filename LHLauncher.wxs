@@ -1,0 +1,129 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+    <Product Id="6b3f8d53-0f30-4ca0-9ceb-1cf7b89e095c" Name="LHLauncher" Version="1.0.7" Manufacturer="LeonLetto" Language="1033" UpgradeCode="d986e6af-b0fb-48a7-b9f5-dfd9dcc30086">
+        <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
+        <Icon Id="LHLauncherIcon" SourceFile="$(var.ReleaseDir)\LHLauncher.ico" />
+        <Binary Id="LaunchPSScript" SourceFile="$(var.ReleaseDir)\LaunchLHLauncher.ps1" />
+
+        <!-- Properties for Closing Application -->
+        <Property Id="CLOSEAPP" Value="LHLauncher.exe" />
+        <util:CloseApplication Id="CloseLHLauncher" Target="LHLauncher.exe" CloseMessage="yes" RebootPrompt="no" Description="Closing running instance of LHLauncher" />
+
+        <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." AllowSameVersionUpgrades="no" Schedule="afterInstallInitialize" />
+        <MediaTemplate EmbedCab="yes" />
+
+        <Feature Id="ProductFeature" Title="LHLauncher" Level="1">
+            <ComponentGroupRef Id="ProductComponents" />
+            <ComponentRef Id="ApplicationShortcut"/>
+            <ComponentRef Id="StartupShortcutComponent"/>
+        </Feature>
+
+        <Directory Id="TARGETDIR" Name="SourceDir">
+            <Directory Id="ProgramFilesFolder">
+                <Directory Id="INSTALLFOLDER" Name="LHLauncher">
+                    <Component Id="RemoveLHLauncherDir" Guid="d7cce6ba-7af8-4f95-94ab-071950609493">
+                        <RemoveFolder Id="INSTALLFOLDER" On="uninstall" />
+                        <RegistryValue Root="HKLM" Key="Software\[ProductName]" Name="installFolder" Type="string" Value="1" KeyPath="yes" />
+                    </Component>
+                    <Component Id="LHLauncherExe" Guid="0cf7f486-c833-4757-801c-fbba0039e6f6">
+                        <File Id="LHLauncherExeFile" Source="$(var.ReleaseDir)\LHLauncher.exe" KeyPath="yes" />
+                    </Component>
+                    <Component Id="LHLauncherPdb" Guid="83c71d8e-41c5-463b-b651-36b1297a52b6">
+                        <File Id="LHLauncherPdbFile" Source="$(var.ReleaseDir)\LHLauncher.pdb" KeyPath="yes" />
+                    </Component>
+                    <Component Id="LHLauncherDll" Guid="58501f66-9bbe-4c0b-ba72-e39fc9cc4182">
+                        <File Id="LHLauncherDllFile" Source="$(var.ReleaseDir)\LHLauncher.dll" KeyPath="yes" />
+                    </Component>
+                    <Component Id="LHLauncherDepsJson" Guid="4539facb-d9d8-4218-ba2c-71aac27fbe96">
+                        <File Id="LHLauncherDepsJsonFile" Source="$(var.ReleaseDir)\LHLauncher.deps.json" KeyPath="yes" />
+                    </Component>
+                    <Component Id="LHLauncherRuntimeConfigJson" Guid="1ee2d2e7-bb87-447a-a006-d97c3b44f16f">
+                        <File Id="LHLauncherRuntimeConfigJsonFile" Source="$(var.ReleaseDir)\LHLauncher.runtimeconfig.json" KeyPath="yes" />
+                    </Component>
+                    <Component Id="LHLauncherIcon" Guid="b73780bc-6a12-48e6-bf01-b3d19f1ae2e5">
+                        <File Id="LHLauncherIconFile" Source="$(var.ReleaseDir)\LHLauncher.ico" KeyPath="yes" />
+                    </Component>
+                    <Component Id="LaunchAppPS" Guid="c10b6253-0f03-485b-99e9-c468d063a28b">
+                        <File Id="LaunchAppPSFile" Source="$(var.ReleaseDir)\LaunchLHLauncher.ps1" KeyPath="yes" />
+                    </Component>
+                    <Component Id="VersionRegistryEntries" Guid="66ef5b5a-ab32-4789-be55-7e5efaa679a1">
+                        <RegistryValue Root="HKCU"
+                                       Key="SOFTWARE\LHLauncher"
+                                       Name="ProductVersion"
+                                       Type="string"
+                                       Value="[ProductVersion]"
+                                       KeyPath="yes"/>
+                    </Component>
+<!--                    <Component Id="DefaultRegistryEntries" Guid="6981f4b5-a859-4dab-b5ff-2feb1ef15d53">-->
+<!--                        <RegistryValue Root="HKCU"-->
+<!--                                       Key="SOFTWARE\LHLauncher\notepad"-->
+<!--                                       Name="Command"-->
+<!--                                       Type="string"-->
+<!--                                       Value="&quot;C:\Windows\System32\Notepad.exe&quot;"-->
+<!--                                       KeyPath="yes"/>-->
+<!--                        <RegistryValue Root="HKCU"-->
+<!--                                       Key="SOFTWARE\LHLauncher\notepad"-->
+<!--                                       Name="ProcessName"-->
+<!--                                       Type="string"-->
+<!--                                       Value="&quot;notepad&quot;"/>-->
+<!--                    </Component>-->
+                </Directory>
+            </Directory>
+            <Directory Id="ProgramMenuFolder">
+                <Directory Id="ApplicationProgramsFolder" Name="LHLauncher">
+                    <Component Id="ApplicationShortcut" Guid="fe53e5ec-b0ca-4ec6-8d0d-d2d210cf2f96">
+                        <Shortcut Id="ApplicationStartMenuShortcut"
+                                  Name="LHLauncher"
+                                  Description="LHLauncher Application"
+                                  Target="[INSTALLFOLDER]LHLauncher.exe"
+                                  Icon="LHLauncherIcon"
+                                  WorkingDirectory="INSTALLFOLDER"/>
+                        <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall"/>
+                        <RegistryValue Root="HKCU" Key="Software\[ProductName]" Name="installed" Type="integer" Value="1" KeyPath="yes"/>
+                    </Component>
+                </Directory>
+            </Directory>
+
+            <Directory Id="StartupFolder">
+                <Component Id="StartupShortcutComponent" Guid="13b252b2-8230-4af4-9357-55f4c8fef98c">
+                    <Shortcut Id="StartupShortcut"
+                              Name="LHLauncher"
+                              Target="[INSTALLFOLDER]LHLauncher.exe"
+                              WorkingDirectory="INSTALLFOLDER"
+                              Icon="LHLauncherIcon"
+                              Description="Launch LHLauncher" />
+                    <RemoveFolder Id="StartupFolder" On="uninstall"/>
+                    <RegistryValue Root="HKCU" Key="Software\[ProductName]"
+                                   Name="StartupShortcutInstalled" Type="integer" Value="1" KeyPath="yes" />
+                </Component>
+            </Directory>
+
+        </Directory>
+        <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+            <ComponentRef Id="RemoveLHLauncherDir" />
+            <ComponentRef Id="LHLauncherExe" />
+            <ComponentRef Id="LHLauncherPdb" />
+            <ComponentRef Id="LHLauncherDll" />
+            <ComponentRef Id="LHLauncherDepsJson" />
+            <ComponentRef Id="LHLauncherRuntimeConfigJson" />
+            <ComponentRef Id="LHLauncherIcon" />
+            <ComponentRef Id="LaunchAppPS" />
+            <ComponentRef Id="VersionRegistryEntries" />
+<!--            <ComponentRef Id="DefaultRegistryEntries" />-->
+        </ComponentGroup>
+        
+        <CustomAction Id="LaunchLHLauncher"
+                      Directory="INSTALLFOLDER"
+                      Execute="deferred"
+                      ExeCommand='powershell.exe -ExecutionPolicy Bypass -Command "&amp; &apos;[INSTALLFOLDER]LaunchLHLauncher.ps1&apos;"'
+                      Return="asyncNoWait"
+                      Impersonate="no"/>
+        <InstallExecuteSequence>
+            <Custom Action="LaunchLHLauncher" Before="InstallFinalize">NOT Installed</Custom>
+        </InstallExecuteSequence>
+        
+<!--        To debug use msiexec /i "LHLauncher.msi" /L*V "install.log"-->
+
+
+    </Product>
+</Wix>
