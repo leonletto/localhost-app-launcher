@@ -37,6 +37,9 @@ try {
 
     # Set the 'loggingPath' value for the base key
     Set-ItemProperty -Path $baseKeyPath -Name "loggingPath" -Value ""
+
+    # Set teh ProductVersion value for the base key
+    Set-ItemProperty -Path $baseKeyPath -Name "ProductVersion" -Value "1.0.7"
     
     # Set the url to the WS ONE Access App catalog for redirects
     Set-ItemProperty -Path $baseKeyPath -Name "appCatalogURL" -Value "https://ws-one-uem-651.workspaceair.com/catalog-portal/ui#/apps"
