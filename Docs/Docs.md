@@ -69,7 +69,7 @@ Sometimes you might not know exactly where the application is installed,
 or you might want to launch an application that is installed in the user's profile.
 In that case, you can use the Start Menu item to launch the application.
 
-To do this, you need to add a registry entry like this:
+To do this, you need to add a registry entry like this pointing to the Start Menu .lnk file:
 
 ![images/LaunchFromStartMenuShortcut.png](images/LaunchFromStartMenuShortcut.png)
 
