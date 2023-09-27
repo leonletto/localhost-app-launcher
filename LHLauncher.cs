@@ -1,18 +1,14 @@
 using Microsoft.Win32;
 using System.Diagnostics;
-using System.Threading;
-using System.Security.Principal;
 using System.Reflection;
-using System.Collections.Generic;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using System.Windows.Forms;
 using System.Net.Security;
-using System.IO;
 using System.Net.Sockets;
 using System.Text.RegularExpressions;
 using System.Runtime.InteropServices;
+using Bobs.Shell;
 using Timer = System.Threading.Timer;
 
 
@@ -20,9 +16,9 @@ namespace LHLauncher
 {
     public class ConfiguredProgram
     {
-        public bool IsValid { get; set;}
-        public string? ProgramName { get; set; }
-        public string? ProcessToVerify { get; set; }
+        public bool IsValid { get; init;}
+        public string? ProgramName { get; init; }
+        public string? ProcessToVerify { get; init; }
         public string? CommandToRun { get; set; }
         
     }
@@ -42,18 +38,18 @@ namespace LHLauncher
             return hostName;
         }
         
-        private static string GetAppCatalogURL()
+        private static string GetAppCatalogUrl()
         {
-            var appCatalogURL = (string?)Registry.GetValue(@"HKEY_CURRENT_USER\Software\LHLauncher", "appCatalogURL", null);
+            var appCatalogUrl = (string?)Registry.GetValue(@"HKEY_CURRENT_USER\Software\LHLauncher", "appCatalogURL", null);
 
-            if (!string.IsNullOrEmpty(appCatalogURL))
-                return appCatalogURL;
+            if (!string.IsNullOrEmpty(appCatalogUrl))
+                return appCatalogUrl;
 
             // Default to localhost.com
             var url = GetHostNameForCertificate();
-            appCatalogURL = "https://{url}".Replace("{url}", url + "/config");
+            appCatalogUrl = "https://{url}".Replace("{url}", url + "/config");
 
-            return appCatalogURL;
+            return appCatalogUrl;
         }
         
         private string GetLoggingPath()
@@ -86,18 +82,19 @@ namespace LHLauncher
 
             var loggingPath = GetLoggingPath();
             var logMessage = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [{fileName}:{lineNo}] {message}";
+            Console.WriteLine(logMessage);
             File.AppendAllText(loggingPath, logMessage + Environment.NewLine);
         }
 
 
         private readonly NotifyIcon _trayIcon;
         
-        private X509Certificate2? serverCertificate;
-        private List<ConfiguredProgram> programs = new List<ConfiguredProgram>();
+        private X509Certificate2? _serverCertificate;
+        private readonly List<ConfiguredProgram> _programs = new();
         
         // Add timer for reload
-        private Timer registryCheckTimer;
-        private readonly object programsLock = new object();
+        private Timer _registryCheckTimer;
+        private readonly object _programsLock = new object();
         
         // P/Invoke declarations
         [DllImport("user32.dll")]
@@ -115,26 +112,28 @@ namespace LHLauncher
         private struct INPUT
         {
             public int type;
-            public MOUSEINPUT mi;
+            public MOUSE_INPUT mi;
         }
 
-        private struct MOUSEINPUT
+        private struct MOUSE_INPUT
         {
-            public int dx;
-            public int dy;
-            public int mouseData;
-            public int dwFlags;
-            public int time;
-            public IntPtr dwExtraInfo;
+            public int Dx;
+            public int Dy;
+#pragma warning disable CS0649 // Field is never assigned to, and will always have its default value
+            public int MouseData;
+            public int DwFlags;
+            public int Time;
+            public IntPtr DwExtraInfo;
+#pragma warning restore CS0649 // Field is never assigned to, and will always have its default value
         }
 
         private void SimulateUserInput()
         {
-            INPUT input = new INPUT();
+            var input = new INPUT();
             input.type = 0; // MOUSE input
-            input.mi.dx = 0;
-            input.mi.dy = 0;
-            input.mi.dwFlags = 0x1; // MOUSEEVENTF_MOVE
+            input.mi.Dx = 0;
+            input.mi.Dy = 0;
+            input.mi.DwFlags = 0x1; // MOUSEEVENTF_MOVE
 
             SendInput(1, ref input, Marshal.SizeOf(typeof(INPUT)));
         }
@@ -148,12 +147,12 @@ namespace LHLauncher
             SetForegroundWindow(process.MainWindowHandle);
         }
         
-        private void RegistryCheckCallback(object state)
+        private void RegistryCheckCallback(object? state = null)
         {
             // Reload the programs from the registry.
             LoadConfiguredPrograms();
         }
-
+        
         public LHLauncher()
         {
             InitializeComponent();
@@ -162,7 +161,7 @@ namespace LHLauncher
             ShowInTaskbar = false;
             
             // Initialize the timer to check the registry every 5 seconds.
-            registryCheckTimer = new Timer(RegistryCheckCallback, null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
+            _registryCheckTimer = new Timer(RegistryCheckCallback, null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
 
             // Create tray menu and items
             var trayMenu = new ContextMenuStrip();
@@ -207,7 +206,7 @@ namespace LHLauncher
                 return;
             }
 
-            lock (programsLock)
+            lock (_programsLock)
             {
                 foreach (var programName in subKeyNames)
                 {
@@ -223,7 +222,7 @@ namespace LHLauncher
                         IsValid = !string.IsNullOrEmpty((string?)subKey.GetValue("Command", null)) &&
                                   !string.IsNullOrEmpty((string?)subKey.GetValue("ProcessName", null))
                     };
-                    programs.Add(program);
+                    _programs.Add(program);
                 }
             }
         }
@@ -259,7 +258,7 @@ namespace LHLauncher
             htmlBuilder.Append("</script>");
             htmlBuilder.Append("</head><body>");
             htmlBuilder.Append($"<h1>Localhost App Launcher Version {productVersion}</h1>");
-            htmlBuilder.Append($"<h2>App Catalog: <a href='{GetAppCatalogURL()}'>{GetAppCatalogURL()}</a></h2>");
+            htmlBuilder.Append($"<h2>App Catalog: <a href='{GetAppCatalogUrl()}'>{GetAppCatalogUrl()}</a></h2>");
             htmlBuilder.Append("<h2>Currently Configured LHLauncher Applications</h2>");
             htmlBuilder.Append("<table border='1'><thead><tr><th>Name</th><th>Process Name</th><th>Process to Launch</th><th>Test URL</th></tr></thead><tbody>");
 
@@ -318,15 +317,15 @@ namespace LHLauncher
 
         private static void SendDefaultResponse(StreamWriter writer)
         {
-            const string responseString = "<html><head><title>LHLauncher</title></head><body><h1>LHLauncher is listening...</h1></body></html>";
-            SendResponse(writer, responseString);
+            const string RESPONSE_STRING = "<html><head><title>LHLauncher</title></head><body><h1>LHLauncher is listening...</h1></body></html>";
+            SendResponse(writer, RESPONSE_STRING);
         }
         
         private static void SendResponse(TextWriter writer, string responseString = "OK", HttpStatusCode statusCode = HttpStatusCode.OK, bool closeBrowser = false)
         {
             if (closeBrowser)
             {
-               var appCatalogUrl = GetAppCatalogURL();
+               var appCatalogUrl = GetAppCatalogUrl();
                 responseString = @"
 <html>
 <head>
@@ -399,7 +398,7 @@ namespace LHLauncher
             var sslStream = new SslStream(client.GetStream(), false);
 
             // Authenticate as the server
-            if (serverCertificate != null) sslStream.AuthenticateAsServer(serverCertificate); else
+            if (_serverCertificate != null) sslStream.AuthenticateAsServer(_serverCertificate); else
             {
                 Log("Server certificate not found. Exiting...");
                 return;
@@ -434,8 +433,8 @@ namespace LHLauncher
            
 
             // Validate the extracted request path
-            const string pathPattern = @"^(/[\w\-\.]*|/?)$";
-            var match = Regex.Match(requestPath ?? string.Empty, pathPattern);
+            const string PATH_PATTERN = @"^(/[\w\-\.]*|/?)$";
+            var match = Regex.Match(requestPath ?? string.Empty, PATH_PATTERN);
 
             if (!match.Success)
             {
@@ -451,22 +450,23 @@ namespace LHLauncher
                 SendResponse(writer, "Request too long.", HttpStatusCode.RequestEntityTooLarge);
             }
 
-            var requestedProgram = programs.FirstOrDefault(p => requestPath != null && requestPath.Equals($"/{p.ProgramName}"));
+            // ReSharper disable once InconsistentlySynchronizedField
+            var requestedProgram = _programs.FirstOrDefault(p => requestPath != null && requestPath.Equals($"/{p.ProgramName}"));
 
             if (requestedProgram != null)
             {
                 var didRun = ExecuteAndMonitorProgram(requestedProgram);
-                if (didRun == "NotValid")
+                switch (didRun)
                 {
-                    SendResponse(writer, $"Program {requestedProgram.ProgramName} is not configured correctly. Please check the registry settings.", HttpStatusCode.BadRequest);
-                }
-                else if (didRun == "NotRunning")
-                {
-                    SendResponse(writer, $"Program {requestedProgram.ProgramName} did not start successfully. Please check the registry settings.", HttpStatusCode.InternalServerError);
-                }
-                else
-                {
-                    SendResponse(writer, $"Executed {requestedProgram.ProgramName} successfully.", HttpStatusCode.OK, true);  // Here we set the closeBrowser parameter to true.
+                    case "NotValid":
+                        SendResponse(writer, $"Program {requestedProgram.ProgramName} is not configured correctly. Please check the registry settings.", HttpStatusCode.BadRequest);
+                        break;
+                    case "NotRunning":
+                        SendResponse(writer, $"Program {requestedProgram.ProgramName} did not start successfully. Please check the registry settings.", HttpStatusCode.InternalServerError);
+                        break;
+                    default:
+                        SendResponse(writer, $"Executed {requestedProgram.ProgramName} successfully.", HttpStatusCode.OK, true);  // Here we set the closeBrowser parameter to true.
+                        break;
                 }
             }
             else if (request.Contains("GET /config"))
@@ -480,8 +480,8 @@ namespace LHLauncher
                 Log("Received request for favicon.ico.");
 
                 // Base64 encoded Letter L icon
-                const string base64EncodedPng = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAQklEQVR4nGP8////fwYKABMlmoeJASwwBiMjI1yQlHDFcAGpkTLwYYDVAEZGRpQwIckAYjXCADwWyE3RgzQQ6WoAALCIDSMEVNcoAAAAAElFTkSuQmCC";
-                var imageBytes = Convert.FromBase64String(base64EncodedPng);
+                const string BASE64_ENCODED_PNG = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAQklEQVR4nGP8////fwYKABMlmoeJASwwBiMjI1yQlHDFcAGpkTLwYYDVAEZGRpQwIckAYjXCADwWyE3RgzQQ6WoAALCIDSMEVNcoAAAAAElFTkSuQmCC";
+                var imageBytes = Convert.FromBase64String(BASE64_ENCODED_PNG);
     
                 SendImageResponse(writer, imageBytes);
             }
@@ -492,8 +492,8 @@ namespace LHLauncher
             }
             else
             {
-                const string responseString = "Invalid request path. Either the program is not configured or the path is invalid.";
-                SendResponse(writer, responseString, HttpStatusCode.BadRequest);
+                const string RESPONSE_STRING = "Invalid request path. Either the program is not configured or the path is invalid.";
+                SendResponse(writer, RESPONSE_STRING, HttpStatusCode.BadRequest);
             }
             
             await writer.FlushAsync();
@@ -513,9 +513,27 @@ namespace LHLauncher
             Log($"Executing command {program.CommandToRun}...");
             // if (program.CommandToRun != null) Process.Start(program.CommandToRun);
             Process? proc = null;
-            if (program.CommandToRun != null) 
+            
+            string? commandToRun = program.CommandToRun;
+            
+            if (commandToRun != null) 
             {
-                proc = Process.Start(program.CommandToRun);
+
+                commandToRun = commandToRun.Trim('"');
+                // Check if the command to run is a .lnk file
+                Log($"Checking if {commandToRun} is a .lnk file...");
+                if (Path.GetExtension(commandToRun).ToLower() == ".lnk")
+                {
+                    Log($"Target path is a .lnk file: {commandToRun}");
+                    // program.CommandToRun = GetShortcutTarget(commandToRun);
+                    var link = new ShellLink(commandToRun);
+                    program.CommandToRun = link.Target;
+                    // program.CommandToRun = @"C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE";
+                    Log($"Target path from .lnk: {program.CommandToRun}");
+                }
+
+
+                if (program.CommandToRun != null) proc = Process.Start(program.CommandToRun);
                 if (proc != null)
                 {
                     proc.WaitForInputIdle(); // Wait for the process to be ready for user input
@@ -540,24 +558,23 @@ namespace LHLauncher
                     break; 
                 }
 
-                if (counter == 1)
+                switch (counter)
                 {
-                    Log("Retrying command...");
-                    if (program.CommandToRun != null) 
+                    case 1:
                     {
-                        proc = Process.Start(program.CommandToRun);
-                        if (proc != null)
+                        Log("Retrying command...");
+                        if (program.CommandToRun != null) 
                         {
+                            proc = Process.Start(program.CommandToRun);
                             proc.WaitForInputIdle();
                             BringProcessToFront(proc);
                         }
-                    }
-                }
 
-                if (counter == 2)
-                {
-                    Log($"Process {processNameToVerify} is not running after 3 tries.");
-                    return "NotRunning";
+                        break;
+                    }
+                    case 2:
+                        Log($"Process {processNameToVerify} is not running after 3 tries.");
+                        return "NotRunning";
                 }
 
                 Thread.Sleep(2000);
@@ -575,20 +592,20 @@ namespace LHLauncher
             if (string.IsNullOrEmpty(hostName))
             {
                 // check if its localhost
-                serverCertificate = LoadCertificateFromStore("localhost");
-                if (serverCertificate is null)
+                _serverCertificate = LoadCertificateFromStore("localhost");
+                if (_serverCertificate is null)
                 {
                     // check if its localhost.com
-                    serverCertificate = LoadCertificateFromStore("localhost.com");
+                    _serverCertificate = LoadCertificateFromStore("localhost.com");
                 }
             }
             else
             {
-                serverCertificate = LoadCertificateFromStore(hostName);
+                _serverCertificate = LoadCertificateFromStore(hostName);
             }
 
             
-            if (serverCertificate == null)
+            if (_serverCertificate == null)
             {
                 Console.WriteLine("Certificate not found. Exiting...");
                 return;
