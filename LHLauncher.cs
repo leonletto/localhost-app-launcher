@@ -455,7 +455,7 @@ namespace LHLauncher
 
             if (requestedProgram != null)
             {
-                var didRun = ExecuteAndMonitorProgram(requestedProgram);
+                var didRun = await ExecuteAndMonitorProgramAsync(requestedProgram);
                 switch (didRun)
                 {
                     case "NotValid":
@@ -464,8 +464,11 @@ namespace LHLauncher
                     case "NotRunning":
                         SendResponse(writer, $"Program {requestedProgram.ProgramName} did not start successfully. Please check the registry settings.", HttpStatusCode.InternalServerError);
                         break;
+                    case "OK":
+                        SendResponse(writer, $"Executed {requestedProgram.ProgramName} successfully.", HttpStatusCode.OK, true); // Here we set the closeBrowser parameter to true.
+                        break;
                     default:
-                        SendResponse(writer, $"Executed {requestedProgram.ProgramName} successfully.", HttpStatusCode.OK, true);  // Here we set the closeBrowser parameter to true.
+                        SendResponse(writer, $"There was an error when running {requestedProgram.ProgramName}.<br/> Error: {didRun}", HttpStatusCode.InternalServerError); 
                         break;
                 }
             }
@@ -503,65 +506,64 @@ namespace LHLauncher
             client.Close();
         }
 
-        private string ExecuteAndMonitorProgram(ConfiguredProgram program)
+        private async Task<string> ExecuteAndMonitorProgramAsync(ConfiguredProgram program)
         {
+            Log($"Checking if program {program.ProgramName} is valid - {program.IsValid}");
             if (!program.IsValid)
             {
+                Log($"Program {program.ProgramName} is not valid.");
+                Log($"Program Details: CommandToRun: {program.CommandToRun}, ProcessToVerify: {program.ProcessToVerify}");
                 return "NotValid";
             }
 
             Log($"Executing command {program.CommandToRun}...");
-            // if (program.CommandToRun != null) Process.Start(program.CommandToRun);
             Process? proc = null;
-            
             string? commandToRun = program.CommandToRun;
-            
-            if (commandToRun != null) 
-            {
 
+            if (commandToRun != null)
+            {
                 commandToRun = commandToRun.Trim('"');
-                // Check if the command to run is a .lnk file
                 Log($"Checking if {commandToRun} is a .lnk file...");
+                
                 if (Path.GetExtension(commandToRun).ToLower() == ".lnk")
                 {
-                    Log($"Target path is a .lnk file: {commandToRun}");
-                    // program.CommandToRun = GetShortcutTarget(commandToRun);
-                    var link = new ShellLink(commandToRun);
-                    program.CommandToRun = link.Target;
-                    // program.CommandToRun = @"C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE";
-                    Log($"Target path from .lnk: {program.CommandToRun}");
+                    try 
+                    {
+                        var link = new ShellLink(commandToRun);
+                        commandToRun = link.Target;
+                        Log($"New Target path from link.Target: {link.Target}");
+                    }
+                    catch (Exception ex) 
+                    {
+                        Log($"Error while processing the .lnk file: {ex.Message}");
+                        return $"There was an error while processing the .lnk file: {ex.Message}";
+                    }
                 }
 
-
-                if (program.CommandToRun != null) proc = Process.Start(program.CommandToRun);
+                if (commandToRun != null) proc = Process.Start(commandToRun);
                 if (proc != null)
                 {
-                    proc.WaitForInputIdle(); // Wait for the process to be ready for user input
+                    proc.WaitForInputIdle();
                     BringProcessToFront(proc);
                 }
             }
-            // Ensure the process name doesn't have an extension for comparison
+
             var processNameToVerify = Path.GetFileNameWithoutExtension(program.ProcessToVerify);
-
             Log($"Waiting for process {processNameToVerify} to start...");
-
             var counter = 0;
-
 
             while (counter < 3)
             {
                 var allProcesses = Process.GetProcessesByName(processNameToVerify);
-
                 if (allProcesses.Length > 0)
                 {
                     Log($"Process {processNameToVerify} is running");
-                    break; 
+                    break;
                 }
 
                 switch (counter)
                 {
                     case 1:
-                    {
                         Log("Retrying command...");
                         if (program.CommandToRun != null) 
                         {
@@ -569,20 +571,19 @@ namespace LHLauncher
                             proc.WaitForInputIdle();
                             BringProcessToFront(proc);
                         }
-
                         break;
-                    }
                     case 2:
                         Log($"Process {processNameToVerify} is not running after 3 tries.");
                         return "NotRunning";
                 }
 
-                Thread.Sleep(2000);
+                await Task.Delay(2000);
                 counter++;
             }
 
             return "OK";
         }
+
 
         
         private async void StartSslListener()
