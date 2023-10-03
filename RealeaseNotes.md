@@ -1,9 +1,23 @@
 ﻿# Release Notes
 
-## [v1.0.6] - 2023-09-19
+## [v1.1.0] - 2023-10-03
 
 ### Added
-- Initial release with basic features.
+- Support for Command line options to launch applications with arguments
+- added LogLevel option to be able to set the log level and see Debug Logs
+- enhanced parsing of commands to support spaces in the command line and options
+- spaces in command line and options must be surrounded by ""
+- Dynamic reloading of changes in the registry without restarting the application - including LogLevel
+- Added verification of the application path to ensure it exists before adding it to the configured programs
+
+
+## [v1.0.8] - 2023-09-27
+
+### Added
+- Support for running applications from the .lnk Start Menu Items
+- additional logging for troubleshooting
+- Code Cleanup
+
 
 ## [v1.0.7] - 2023-09-25
 
@@ -18,6 +32,10 @@
 ### Fixed
 - Resolved some uninstall bugs where the program folder was not removed.
 
+## [v1.0.6] - 2023-09-19
+
+### Added
+- Initial release with basic features.
 ---
 
 For more details, see the [commit log](https://github.com/leonletto/localhost-app-launcher/commits) or the [full documentation](https://github.com/leonletto/localhost-app-launcher/blob/main/Docs/Docs.md).

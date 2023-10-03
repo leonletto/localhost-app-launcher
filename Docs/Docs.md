@@ -69,11 +69,20 @@ Sometimes you might not know exactly where the application is installed,
 or you might want to launch an application that is installed in the user's profile.
 In that case, you can use the Start Menu item to launch the application.
 
-To do this, you need to add a registry entry like this:
+To do this, you need to add a registry entry like this pointing to the Start Menu .lnk file:
 
 ![images/LaunchFromStartMenuShortcut.png](images/LaunchFromStartMenuShortcut.png)
 
 This is useful in cases like Microsoft Office where its installed in Program Files for some versions and Program Files (x86) for others.
+
+**Tested application configuration**
+I have tested teh following application configurations showing the types of ways you can call the command line:
+
+****Note the placement of the quotes if the application executable or options have spaces in them.****
+****The extra quotes are required if there are spaces in the path or options.****
+
+![images/ExampleProgramConfigurations.png](images/ExampleProgramConfigurations.png)
+
 
 **Sample Log Output**
 
@@ -188,6 +197,10 @@ The last step is to deploy the LHLauncher.msi as a standard MSI application. Bec
 You must add the Windows Desktop Runtime which you configured above as a dependency.
 
 ![images/deployLHLauncher1.png](images/deployLHLauncher1.png)
+
+Under Deployment Options, you must set the install context to User.
+
+![images/deployLHLauncher3.png](images/deployLHLauncher3.png)
 
 And in the Images area you can add the image icons of your choice so that the App Catalog has a nice Icon. I have added some samples or you can choose your own.
 
