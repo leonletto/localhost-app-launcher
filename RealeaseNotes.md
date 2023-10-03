@@ -6,7 +6,7 @@
 - Support for Command line options to launch applications with arguments
 - added LogLevel option to be able to set the log level and see Debug Logs
 - enhanced parsing of commands to support spaces in the command line and options
-- spaces in command line and options must be surrounded by ""
+- spaces in the command line and options must be surrounded by ""
 - Dynamic reloading of changes in the registry without restarting the application - including LogLevel
 - Added verification of the application path to ensure it exists before adding it to the configured programs
 
