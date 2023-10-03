@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
-    <Product Id="6b3f8d53-0f30-4ca0-9ceb-1cf7b89e095c" Name="LHLauncher" Version="1.0.8" Manufacturer="LeonLetto" Language="1033" UpgradeCode="d986e6af-b0fb-48a7-b9f5-dfd9dcc30086">
+    <Product Id="*" Name="LHLauncher" Version="1.1.0" Manufacturer="LeonLetto" Language="1033" UpgradeCode="d986e6af-b0fb-48a7-b9f5-dfd9dcc30086">
         <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
         <Icon Id="LHLauncherIcon" SourceFile="$(var.ReleaseDir)\LHLauncher.ico" />
         <Binary Id="LaunchPSScript" SourceFile="$(var.ReleaseDir)\LaunchLHLauncher.ps1" />
@@ -9,7 +9,12 @@
         <Property Id="CLOSEAPP" Value="LHLauncher.exe" />
         <util:CloseApplication Id="CloseLHLauncher" Target="LHLauncher.exe" CloseMessage="yes" RebootPrompt="no" Description="Closing running instance of LHLauncher" />
 
-        <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." AllowSameVersionUpgrades="no" Schedule="afterInstallInitialize" />
+        <MajorUpgrade 
+                DowngradeErrorMessage="A newer version of [ProductName] is already installed." 
+                AllowSameVersionUpgrades="yes" 
+                Schedule="afterInstallInitialize" />
+        
+
         <MediaTemplate EmbedCab="yes" />
 
         <Feature Id="ProductFeature" Title="LHLauncher" Level="1">
@@ -57,19 +62,6 @@
                                        Value="[ProductVersion]"
                                        KeyPath="yes"/>
                     </Component>
-<!--                    <Component Id="DefaultRegistryEntries" Guid="6981f4b5-a859-4dab-b5ff-2feb1ef15d53">-->
-<!--                        <RegistryValue Root="HKCU"-->
-<!--                                       Key="SOFTWARE\LHLauncher\notepad"-->
-<!--                                       Name="Command"-->
-<!--                                       Type="string"-->
-<!--                                       Value="&quot;C:\Windows\System32\Notepad.exe&quot;"-->
-<!--                                       KeyPath="yes"/>-->
-<!--                        <RegistryValue Root="HKCU"-->
-<!--                                       Key="SOFTWARE\LHLauncher\notepad"-->
-<!--                                       Name="ProcessName"-->
-<!--                                       Type="string"-->
-<!--                                       Value="&quot;notepad&quot;"/>-->
-<!--                    </Component>-->
                 </Directory>
             </Directory>
             <Directory Id="ProgramMenuFolder">
@@ -113,17 +105,16 @@
             <ComponentRef Id="LaunchAppPS" />
             <ComponentRef Id="VersionRegistryEntries" />
             <ComponentRef Id="BobsShellDll" />
-<!--            <ComponentRef Id="DefaultRegistryEntries" />-->
         </ComponentGroup>
         
         <CustomAction Id="LaunchLHLauncher"
                       Directory="INSTALLFOLDER"
                       Execute="deferred"
-                      ExeCommand='powershell.exe -ExecutionPolicy Bypass -Command "&amp; &apos;[INSTALLFOLDER]LaunchLHLauncher.ps1&apos;"'
+                      ExeCommand='powershell.exe -ExecutionPolicy Bypass -WindowStyle Minimized -Command "&amp; &apos;[INSTALLFOLDER]LaunchLHLauncher.ps1&apos;"'
                       Return="asyncNoWait"
-                      Impersonate="no"/>
+                      Impersonate="yes"/>
         <InstallExecuteSequence>
-            <Custom Action="LaunchLHLauncher" Before="InstallFinalize">NOT Installed</Custom>
+            <Custom Action="LaunchLHLauncher" Before="InstallFinalize" />
         </InstallExecuteSequence>
         
 <!--        To debug use msiexec /i "LHLauncher.msi" /L*V "install.log"-->
