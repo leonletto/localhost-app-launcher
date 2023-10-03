@@ -38,6 +38,8 @@ namespace LHLauncher
             return hostName;
         }
         
+        private bool warningIssued = false;
+        
         private static string GetAppCatalogUrl()
         {
             var appCatalogUrl = (string?)Registry.GetValue(@"HKEY_CURRENT_USER\Software\LHLauncher", "appCatalogURL", null);
@@ -71,9 +73,21 @@ namespace LHLauncher
 
             return loggingPath;
         }
-
-        private void Log(string message)
+        
+        public enum LogLevel
         {
+            Debug,
+            Info
+        }
+
+        private LogLevel currentLogLevel = LogLevel.Info;
+        private void Log(string message, LogLevel logLevel = LogLevel.Info)
+        {
+            // Only log messages that are of the current log level or more severe
+            if (logLevel < currentLogLevel)
+            {
+                return;
+            }
             // Get the current stack trace and the previous frame (caller)
             var frame = new StackTrace(1, true).GetFrame(0); // '1' skips one frame to get the caller of this method
             if (frame == null) return;
@@ -82,7 +96,7 @@ namespace LHLauncher
 
             var loggingPath = GetLoggingPath();
             var logMessage = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [{fileName}:{lineNo}] {message}";
-            Console.WriteLine(logMessage);
+            // Console.WriteLine(logMessage);
             File.AppendAllText(loggingPath, logMessage + Environment.NewLine);
         }
 
@@ -206,12 +220,51 @@ namespace LHLauncher
                 return;
             }
 
+            try
+            {
+                var newLogLevel = baseRegistryKey.GetValue("logLevel", null);
+                if (newLogLevel != null)
+                {
+                    if (newLogLevel.ToString() == "Debug")
+                    {
+                        currentLogLevel = LogLevel.Debug;
+                    }
+                    else
+                    {
+                        currentLogLevel = LogLevel.Info;
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                currentLogLevel = LogLevel.Info;
+                Log($"LogLevel not set in the registry, defaulting to {currentLogLevel}. Error: {e.Message}", LogLevel.Debug);
+            }
+
             lock (_programsLock)
             {
                 foreach (var programName in subKeyNames)
                 {
                     using var subKey = baseRegistryKey.OpenSubKey(programName);
                     if (subKey == null) continue;
+                    var isBadString = false;
+
+                    var commandString = (string?)subKey.GetValue("Command", null);
+                    if (commandString != null)
+                    {
+                        commandString = CheckIfLinkAndParse(commandString);
+                        Log($"commandToRun: {commandString}", LogLevel.Debug);
+                        var (executable, arguments) = ParseCommand(commandString);
+                        Log($"executable: {executable} arguments: {arguments}", LogLevel.Debug);
+                        
+                        if (string.IsNullOrEmpty(executable) || !System.IO.File.Exists(executable))
+                        {
+                            if (!warningIssued) Log($"Executable for {commandString} does not exist");
+                            isBadString = true;
+                            warningIssued = true;
+                        }
+                    }
+                    
                     var processToVerifyTemp = (string?)subKey.GetValue("ProcessName", null);
                     processToVerifyTemp = processToVerifyTemp?.Trim('"').ToLower();
                     var program = new ConfiguredProgram
@@ -220,8 +273,10 @@ namespace LHLauncher
                         CommandToRun = (string?)subKey.GetValue("Command", null),
                         ProcessToVerify = processToVerifyTemp,
                         IsValid = !string.IsNullOrEmpty((string?)subKey.GetValue("Command", null)) &&
-                                  !string.IsNullOrEmpty((string?)subKey.GetValue("ProcessName", null))
+                                  !string.IsNullOrEmpty((string?)subKey.GetValue("ProcessName", null)) &&
+                                  !isBadString
                     };
+                    _programs.RemoveAll(p => p.ProgramName == programName);
                     _programs.Add(program);
                 }
             }
@@ -262,20 +317,29 @@ namespace LHLauncher
             htmlBuilder.Append("<h2>Currently Configured LHLauncher Applications</h2>");
             htmlBuilder.Append("<table border='1'><thead><tr><th>Name</th><th>Process Name</th><th>Process to Launch</th><th>Test URL</th></tr></thead><tbody>");
 
-            foreach (string programName in baseRegistryKey.GetSubKeyNames())
+            foreach (ConfiguredProgram program in _programs)
             {
-                using (var subkey = baseRegistryKey.OpenSubKey(programName))
+                if (program.IsValid)
                 {
-                    if (subkey != null)
-                    {
-                        var commandToRun = (string?)subkey.GetValue("Command", null);
-                        var processToVerify = (string?)subkey.GetValue("ProcessName", null);
-                        if (string.IsNullOrEmpty(commandToRun) || string.IsNullOrEmpty(processToVerify)) continue;
-                        var urlToOpen = "https://" + GetHostNameForCertificate() + "/" + programName;
-                        htmlBuilder.AppendFormat("<tr><td>{0}</td><td>{1}</td><td>{2}</td><td><a href='javascript:void(0)' onclick='openInNewTab(\"{3}\")'>Open {0}</a></td></tr>", programName, processToVerify, commandToRun, urlToOpen);
-                    }
+                    var urlToOpen = "https://" + GetHostNameForCertificate() + "/" + program.ProgramName;
+                    htmlBuilder.AppendFormat("<tr><td>{0}</td><td>{1}</td><td>{2}</td><td><a href='javascript:void(0)' onclick='openInNewTab(\"{3}\")'>Open {0}</a></td></tr>", program.ProgramName, program.ProcessToVerify, program.CommandToRun, urlToOpen);
                 }
+                
             }
+            // foreach (string programName in baseRegistryKey.GetSubKeyNames())
+            // {
+            //     using (var subkey = baseRegistryKey.OpenSubKey(programName))
+            //     {
+            //         if (subkey != null)
+            //         {
+            //             var commandToRun = (string?)subkey.GetValue("Command", null);
+            //             var processToVerify = (string?)subkey.GetValue("ProcessName", null);
+            //             if (string.IsNullOrEmpty(commandToRun) || string.IsNullOrEmpty(processToVerify)) continue;
+            //             var urlToOpen = "https://" + GetHostNameForCertificate() + "/" + programName;
+            //             htmlBuilder.AppendFormat("<tr><td>{0}</td><td>{1}</td><td>{2}</td><td><a href='javascript:void(0)' onclick='openInNewTab(\"{3}\")'>Open {0}</a></td></tr>", programName, processToVerify, commandToRun, urlToOpen);
+            //         }
+            //     }
+            // }
             htmlBuilder.Append("</tbody></table></body></html>");
             return htmlBuilder.ToString();
         }
@@ -438,7 +502,7 @@ namespace LHLauncher
 
             if (!match.Success)
             {
-                Log("Invalid request path.");
+                Log($"Invalid request path. {requestPath}", LogLevel.Debug);
                 SendResponse(writer, "Invalid request path.", HttpStatusCode.BadRequest);
                 return;  // Ensure you exit out of the function after sending an error response.
             }  
@@ -446,7 +510,7 @@ namespace LHLauncher
             // Check request length
             if (request.Length > 2048) 
             {
-                Log("Request too long.");
+                Log("Request too long. {requestPath}", LogLevel.Debug);
                 SendResponse(writer, "Request too long.", HttpStatusCode.RequestEntityTooLarge);
             }
 
@@ -480,7 +544,7 @@ namespace LHLauncher
             }
             else if (request.Contains("GET /favicon.ico"))
             {
-                Log("Received request for favicon.ico.");
+                Log("Received request for favicon.ico.", LogLevel.Debug);
 
                 // Base64 encoded Letter L icon
                 const string BASE64_ENCODED_PNG = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAQklEQVR4nGP8////fwYKABMlmoeJASwwBiMjI1yQlHDFcAGpkTLwYYDVAEZGRpQwIckAYjXCADwWyE3RgzQQ6WoAALCIDSMEVNcoAAAAAElFTkSuQmCC";
@@ -490,7 +554,7 @@ namespace LHLauncher
             }
             else if (requestPath is "/" or "/index.html")
             {
-                Log("Received request for / or index.html.");
+                Log("Received request for / or index.html." , LogLevel.Debug);
                 SendDefaultResponse(writer);
             }
             else
@@ -505,56 +569,220 @@ namespace LHLauncher
             sslStream.Close();
             client.Close();
         }
-
-        private async Task<string> ExecuteAndMonitorProgramAsync(ConfiguredProgram program)
+        
+        private (string? Executable, string? Arguments) ParseCommand(string? command)
         {
-            Log($"Checking if program {program.ProgramName} is valid - {program.IsValid}");
+            Log($"Starting to parse command: {command}", LogLevel.Debug);
+
+            if (string.IsNullOrEmpty(command))
+            {
+                Log("Command is null or empty.", LogLevel.Debug);
+                return (null, null);
+            }
+
+            // Count the number of quotes at the beginning and end of the string
+            int startQuotes = command.StartsWith("\"\"") ? 2 : (command.StartsWith("\"") ? 1 : 0);
+            int endQuotes = command.EndsWith("\"\"") ? 2 : (command.EndsWith("\"") ? 1 : 0);
+            
+            // Remove outer quotes only if both sides have a single quote, indicating the whole command is enclosed
+            // unless there is a % after the quote
+            if (startQuotes == 1 && endQuotes == 1)
+            {
+                    command = command[1..^1];
+            }
+            
+            // Also remove quotes if both sides have double quotes, indicating the whole command is enclosed
+            else if (startQuotes == 2 && endQuotes == 2)
+            {
+                command = command[1..^1];
+            }
+            
+            // Also remove quotes if the start has 2 and the end has one, indicating the executable is enclosed
+            else if (startQuotes == 2 && endQuotes == 1)
+            {
+                command = command[1..];
+            }
+
+            Log($"Command after handling outer quotes: {command}", LogLevel.Debug);
+
+            // Initialize string builders to hold the executable and the arguments
+            StringBuilder executable = new StringBuilder();
+            StringBuilder arguments = new StringBuilder();
+
+            // Flags to indicate the current parsing context
+            bool insideQuotes = false;
+            bool executableParsed = false;
+
+
+            for (int i = 0; i < command.Length; i++)
+            {
+                char c = command[i];
+
+                if (c == '"')
+                {
+                    insideQuotes = !insideQuotes;
+                    continue;  // Skip the quote character itself
+                }
+
+                if (c == ' ' && !insideQuotes)
+                {
+                    if (!executableParsed)
+                    {
+                        // First unquoted space indicates the separation between the executable and the arguments
+                        executableParsed = true;
+                    }
+                    else
+                    {
+                        // Additional spaces are considered part of the arguments
+                        arguments.Append(c);
+                    }
+                }
+                else if (c == ' ' && !executableParsed)
+                {
+                        executable.Append(c);
+                }
+                else
+                {
+                    if (executableParsed)
+                    {
+                        // Append characters to arguments after the executable has been parsed
+                        arguments.Append(c);
+                    }
+                    else
+                    {
+                        // Append characters to executable until the first unquoted space is found
+                        executable.Append(c);
+                    }
+                }
+            }
+
+            Log($"Executable parsed: {executable}", LogLevel.Debug);
+            Log($"Arguments parsed: {arguments}", LogLevel.Debug);
+
+            return (executable.ToString(), arguments.ToString());
+        }
+        
+        private string CheckIfLinkAndParse(string commandToRun)
+        {
+            Log($"Checking if {commandToRun} is a .lnk file...", LogLevel.Debug);
+                
+            if (Path.GetExtension(commandToRun).ToLower() == ".lnk" || Path.GetExtension(commandToRun[1..^1]).ToLower() == ".lnk")
+            {
+                try 
+                {
+                    Log($"Attempting to resolve .lnk file {commandToRun}", LogLevel.Debug);
+                    ShellLink link;
+                    if (Path.GetExtension(commandToRun).ToLower() == ".lnk")
+                    {
+                        // check if the file exists
+                        if (!File.Exists(commandToRun))
+                        {
+                            Log($"File {commandToRun} does not exist.", LogLevel.Debug);
+                            return commandToRun;
+                        }
+                        link = new ShellLink(commandToRun);
+                    }
+                    else
+                    {
+                        // check if the file exists
+                        if (!File.Exists(commandToRun[1..^1]))
+                        {
+                            Log($"File {commandToRun[1..^1]} does not exist.", LogLevel.Debug);
+                            return commandToRun;
+                        }
+                        link = new ShellLink(commandToRun[1..^1]);
+                    }
+
+                    commandToRun = $"\"{link.Target}\" {link.Arguments}";
+                    Log($"New command to run fom Link: {commandToRun}", LogLevel.Debug);
+                }
+                catch (Exception ex) 
+                {
+                    Log($"Error while processing the .lnk file: {ex.Message}");
+                    return $"There was an error while processing the .lnk file: {ex.Message}";
+                }
+            }
+
+            return commandToRun;
+        }
+
+
+
+
+        private async Task<string> ExecuteAndMonitorProgramAsync(ConfiguredProgram program, CancellationToken cancellationToken = default)
+        {
+            Log($"Checking if program {program.ProgramName} is valid - {program.IsValid}", LogLevel.Debug);
             if (!program.IsValid)
             {
                 Log($"Program {program.ProgramName} is not valid.");
-                Log($"Program Details: CommandToRun: {program.CommandToRun}, ProcessToVerify: {program.ProcessToVerify}");
+                Log($"Program Details: CommandToRun: {program.CommandToRun}, ProcessToVerify: {program.ProcessToVerify}", LogLevel.Debug);
                 return "NotValid";
             }
 
             Log($"Executing command {program.CommandToRun}...");
             Process? proc = null;
             string? commandToRun = program.CommandToRun;
-
+            
             if (commandToRun != null)
             {
-                commandToRun = commandToRun.Trim('"');
-                Log($"Checking if {commandToRun} is a .lnk file...");
+                // Log($"Checking if {commandToRun} is a .lnk file...", LogLevel.Debug);
+                //
+                // if (Path.GetExtension(commandToRun).ToLower() == ".lnk" || Path.GetExtension(commandToRun[1..^1]).ToLower() == ".lnk")
+                // {
+                //     try 
+                //     {
+                //         Log($"Attempting to resolve .lnk file {commandToRun}", LogLevel.Debug);
+                //         ShellLink link;
+                //         if (Path.GetExtension(commandToRun).ToLower() == ".lnk")
+                //         {
+                //             link = new ShellLink(commandToRun);
+                //         }
+                //         else
+                //         {
+                //             link = new ShellLink(commandToRun[1..^1]);
+                //         }
+                //
+                //         commandToRun = $"\"{link.Target}\" {link.Arguments}";
+                //         Log($"New command to run fom Link: {commandToRun}", LogLevel.Debug);
+                //     }
+                //     catch (Exception ex) 
+                //     {
+                //         Log($"Error while processing the .lnk file: {ex.Message}");
+                //         return $"There was an error while processing the .lnk file: {ex.Message}";
+                //     }
+                // }
                 
-                if (Path.GetExtension(commandToRun).ToLower() == ".lnk")
+                commandToRun = CheckIfLinkAndParse(commandToRun);
+                
+                Log($"Going to Parse command {commandToRun}...", LogLevel.Debug);
+                var (executable, arguments) = ParseCommand(commandToRun);
+                Log($"Executable: {executable}, Arguments: {arguments}", LogLevel.Debug);
+                
+                // Start the process
+                if (executable != null)
                 {
-                    try 
+                    ProcessStartInfo startInfo = new ProcessStartInfo(executable, arguments??"");
+                    Log($"Starting process {executable} with arguments {arguments}", LogLevel.Debug);
+                    proc = Process.Start(startInfo);
+                    Log($"Process started: {proc?.Id}", LogLevel.Debug);
+                    if (proc != null)
                     {
-                        var link = new ShellLink(commandToRun);
-                        commandToRun = link.Target;
-                        Log($"New Target path from link.Target: {link.Target}");
-                    }
-                    catch (Exception ex) 
-                    {
-                        Log($"Error while processing the .lnk file: {ex.Message}");
-                        return $"There was an error while processing the .lnk file: {ex.Message}";
+                        Log($"Waiting for process {proc.Id} to start...", LogLevel.Debug);
+                        await Task.Run(() => proc.WaitForInputIdle(), cancellationToken);
+                        Log($"Process {proc.Id} is now idle.", LogLevel.Debug);
+                        BringProcessToFront(proc);
                     }
                 }
-
-                if (commandToRun != null) proc = Process.Start(commandToRun);
-                if (proc != null)
-                {
-                    proc.WaitForInputIdle();
-                    BringProcessToFront(proc);
-                }
+                
             }
 
             var processNameToVerify = Path.GetFileNameWithoutExtension(program.ProcessToVerify);
-            Log($"Waiting for process {processNameToVerify} to start...");
+            Log($"Waiting for process {processNameToVerify} to start...", LogLevel.Debug);
             var counter = 0;
 
             while (counter < 3)
             {
-                var allProcesses = Process.GetProcessesByName(processNameToVerify);
+                var allProcesses = await Task.Run(() => Process.GetProcessesByName(processNameToVerify), cancellationToken);
                 if (allProcesses.Length > 0)
                 {
                     Log($"Process {processNameToVerify} is running");
@@ -564,12 +792,19 @@ namespace LHLauncher
                 switch (counter)
                 {
                     case 1:
-                        Log("Retrying command...");
-                        if (program.CommandToRun != null) 
+                        Log("Retrying command...", LogLevel.Debug);
+                        var (executable, arguments) = ParseCommand(commandToRun);
+                
+                        // Start the process
+                        if (executable != null)
                         {
-                            proc = Process.Start(program.CommandToRun);
-                            proc.WaitForInputIdle();
-                            BringProcessToFront(proc);
+                            ProcessStartInfo startInfo = new ProcessStartInfo(executable, arguments??"");
+                            proc = Process.Start(startInfo);
+                            if (proc != null)
+                            {
+                                proc.WaitForInputIdle();
+                                BringProcessToFront(proc);
+                            }
                         }
                         break;
                     case 2:
@@ -577,7 +812,7 @@ namespace LHLauncher
                         return "NotRunning";
                 }
 
-                await Task.Delay(2000);
+                await Task.Delay(2000, cancellationToken);
                 counter++;
             }
 
@@ -589,7 +824,7 @@ namespace LHLauncher
         private async void StartSslListener()
         {
             var hostName = (string?)Registry.GetValue(@"HKEY_CURRENT_USER\Software\LHLauncher", "hostName", null);
-
+            Log($"HostName: {hostName} if null, will try localhost.com", LogLevel.Debug);
             if (string.IsNullOrEmpty(hostName))
             {
                 // check if its localhost
@@ -604,11 +839,14 @@ namespace LHLauncher
             {
                 _serverCertificate = LoadCertificateFromStore(hostName);
             }
+            Log($"Server Certificate Thumbprint : {_serverCertificate?.Thumbprint}", LogLevel.Debug);
+            Log($"Server Certificate Subject: {_serverCertificate?.Subject}", LogLevel.Debug);
 
             
             if (_serverCertificate == null)
             {
                 Console.WriteLine("Certificate not found. Exiting...");
+                Log("Certificate not found. Exiting...");
                 return;
             }
             var port = 443;
@@ -627,7 +865,7 @@ namespace LHLauncher
         }
 
         
-        private static X509Certificate2? LoadCertificateFromStore(string subjectName)
+        private X509Certificate2? LoadCertificateFromStore(string subjectName)
         {
             X509Store store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
             store.Open(OpenFlags.ReadOnly);
@@ -640,6 +878,7 @@ namespace LHLauncher
             {
                 return certCollection[0]; // Return the first certificate, if found
             }
+            Log("Certificate not found.", LogLevel.Debug);
             return null; // Or handle this more gracefully
 
         }
