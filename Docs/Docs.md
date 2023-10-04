@@ -208,6 +208,15 @@ And in the Images area you can add the image icons of your choice so that the Ap
 
 Click Save and Assign to assign the application to your users.
 
+**Troubleshooting**
+
+If you have issues with the application not starting, you can check the logs in the C:\\ProgramData\\LHLauncher folder.
+
+For more indepth logs, you can add a registry entry to set the log level to Debug:
+HKEY_CURRENT_USER\SOFTWARE\LHLauncher\LogLevel
+
+Set the String value to Debug for troubleshooting or Info to reset back to normal.
+
 Final Words
 
 The application is set to launch when installed automatically, and it will start automatically if the user reboots or logs out and logs in. However, because the application is being installed in the system context, it may not run when first installed by the administrator, so please let your users know to either reboot at the end or launch the LHLauncher shortcut once you first deploy it.

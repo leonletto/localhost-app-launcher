@@ -59,6 +59,12 @@ This will also modify the windows hosts file to ensure `localhost.com` points to
 
 Deploy the LHLauncher.msi as a standard MSI application. Add the .NET Windows Desktop Runtime as a dependency.
 
+### Whats Next
+
+Working on making the application more robust and secure:
+- Adding Certificate chacking and other security features. 
+- Adding more try/catch with logging to make the application more robust.
+
 ## Contact
 
 For questions or requests, contact Leon Letto at VMware – [lettol@vmware.com](mailto:lettol@vmware.com).
