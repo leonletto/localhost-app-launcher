@@ -8,6 +8,7 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Text.RegularExpressions;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using Bobs.Shell;
 using Timer = System.Threading.Timer;
 
@@ -725,32 +726,6 @@ namespace LHLauncher
             
             if (commandToRun != null)
             {
-                // Log($"Checking if {commandToRun} is a .lnk file...", LogLevel.Debug);
-                //
-                // if (Path.GetExtension(commandToRun).ToLower() == ".lnk" || Path.GetExtension(commandToRun[1..^1]).ToLower() == ".lnk")
-                // {
-                //     try 
-                //     {
-                //         Log($"Attempting to resolve .lnk file {commandToRun}", LogLevel.Debug);
-                //         ShellLink link;
-                //         if (Path.GetExtension(commandToRun).ToLower() == ".lnk")
-                //         {
-                //             link = new ShellLink(commandToRun);
-                //         }
-                //         else
-                //         {
-                //             link = new ShellLink(commandToRun[1..^1]);
-                //         }
-                //
-                //         commandToRun = $"\"{link.Target}\" {link.Arguments}";
-                //         Log($"New command to run fom Link: {commandToRun}", LogLevel.Debug);
-                //     }
-                //     catch (Exception ex) 
-                //     {
-                //         Log($"Error while processing the .lnk file: {ex.Message}");
-                //         return $"There was an error while processing the .lnk file: {ex.Message}";
-                //     }
-                // }
                 
                 commandToRun = CheckIfLinkAndParse(commandToRun);
                 
@@ -876,12 +851,88 @@ namespace LHLauncher
 
             if (certCollection.Count > 0)
             {
-                return certCollection[0]; // Return the first certificate, if found
-            }
-            Log("Certificate not found.", LogLevel.Debug);
-            return null; // Or handle this more gracefully
+                // Return the first certificate, if found
+                X509Certificate2 cert = certCollection[0];
 
+                // Check for expiration
+                if (DateTime.Now > cert.NotAfter || DateTime.Now < cert.NotBefore)
+                {
+                    Log("The certificate is expired or not yet valid.");
+                    return null;
+                }
+
+                // Build the certificate chain
+                X509Chain chain = new X509Chain();
+
+                // Enable CRL checking
+                chain.ChainPolicy.RevocationMode = X509RevocationMode.Online;
+                chain.ChainPolicy.RevocationFlag = X509RevocationFlag.ExcludeRoot;
+                
+                bool chainBuilt = chain.Build(cert);
+
+                if (!chainBuilt)
+                {
+                    bool crlNotFound = chain.ChainStatus.Any(status => status.Status == X509ChainStatusFlags.RevocationStatusUnknown);
+                    bool certificateRevoked = chain.ChainStatus.Any(status => status.Status == X509ChainStatusFlags.Revoked);
+    
+                    if (crlNotFound)
+                    {
+                        Log("CRL not found. Proceeding anyway, but this should be investigated.");
+                    }
+    
+                    if (certificateRevoked)
+                    {
+                        Log("The certificate has been revoked.");
+                        return null;
+                    }
+    
+                    if (!crlNotFound)
+                    {
+                        Log("The certificate chain could not be built for unknown reasons.");
+                        return null;
+                    }
+                }
+
+                // Disallow self-signed certificates by checking the chain length
+                if (chain.ChainElements.Count <= 1)
+                {
+                    Log("The certificate is self-signed, which is not allowed.");
+                    return null;
+                }
+
+                // Check certificate purpose
+                bool hasServerAuthEku = false;
+                foreach (var extension in cert.Extensions)
+                {
+                    if (extension is X509EnhancedKeyUsageExtension eku)
+                    {
+                        var serverAuthOid = new Oid("1.3.6.1.5.5.7.3.1"); // OID for Server Authentication
+                        foreach (Oid oid in eku.EnhancedKeyUsages)
+                        {
+                            if (oid.Value == serverAuthOid.Value)
+                            {
+                                hasServerAuthEku = true;
+                                break;
+                            }
+                        }
+
+                        if (!hasServerAuthEku)
+                        {
+                            Log("The certificate is not intended for SSL server authentication.");
+                            return null;
+                        }
+                    }
+                }
+
+                // If it passed all the checks, return the certificate
+                return cert;
+            }
+
+            Log("Certificate not found.");
+            return null; // Or handle this more gracefully
         }
+
+
 
         
     }
