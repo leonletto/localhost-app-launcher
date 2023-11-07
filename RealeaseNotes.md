@@ -7,6 +7,7 @@
 - Support for the `FailedLaunchMessage` registry key to allow custom message to be displayed when the application fails to launch.
 - Support for the `GeneralFailureMessage` registry key to allow custom message to be displayed when an unknown error occurs.
 - Support for the `SuccessfulLaunchMessage` registry key to allow custom message to be displayed when the application launches successfully and the window does not close.
+- Added additional checks to verify certificates are valid.
 
 
 ## [v1.1.0] - 2023-10-03
