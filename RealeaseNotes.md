@@ -1,6 +1,6 @@
 ﻿# Release Notes
 
-## [v1.1.2] - 2023-11-07
+## [v1.2.0] - 2023-11-07
 
 ### Added
 - Support for the `MisconfiguredAppMessage` registry key to allow custom message to be displayed when the application is not configured correctly.
