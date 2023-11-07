@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
-    <Product Id="*" Name="LHLauncher" Version="1.1.0" Manufacturer="LeonLetto" Language="1033" UpgradeCode="d986e6af-b0fb-48a7-b9f5-dfd9dcc30086">
+    <Product Id="*" Name="LHLauncher" Version="1.2.0" Manufacturer="LeonLetto" Language="1033" UpgradeCode="d986e6af-b0fb-48a7-b9f5-dfd9dcc30086">
         <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
         <Icon Id="LHLauncherIcon" SourceFile="$(var.ReleaseDir)\LHLauncher.ico" />
         <Binary Id="LaunchPSScript" SourceFile="$(var.ReleaseDir)\LaunchLHLauncher.ps1" />

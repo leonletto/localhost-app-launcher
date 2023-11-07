@@ -1,5 +1,14 @@
 ﻿# Release Notes
 
+## [v1.1.2] - 2023-11-07
+
+### Added
+- Support for the `MisconfiguredAppMessage` registry key to allow custom message to be displayed when the application is not configured correctly.
+- Support for the `FailedLaunchMessage` registry key to allow custom message to be displayed when the application fails to launch.
+- Support for the `GeneralFailureMessage` registry key to allow custom message to be displayed when an unknown error occurs.
+- Support for the `SuccessfulLaunchMessage` registry key to allow custom message to be displayed when the application launches successfully and the window does not close.
+
+
 ## [v1.1.0] - 2023-10-03
 
 ### Added
