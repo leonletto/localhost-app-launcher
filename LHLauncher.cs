@@ -8,7 +8,9 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Text.RegularExpressions;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using Bobs.Shell;
+using Form = System.Windows.Forms.Form;
 using Timer = System.Threading.Timer;
 
 
@@ -80,11 +82,18 @@ namespace LHLauncher
             Info
         }
 
-        private LogLevel currentLogLevel = LogLevel.Info;
+        private LogLevel _currentLogLevel = LogLevel.Info;
+
+        private string? _misconfiguredProgramMessageFromRegistry;
+        private string? _failedLaunchMessageFromRegistry;
+        private string? _generalFailureMessageFromRegistry;
+        private string? _successfulLaunchMessageFromRegistry;
+        
+        
         private void Log(string message, LogLevel logLevel = LogLevel.Info)
         {
             // Only log messages that are of the current log level or more severe
-            if (logLevel < currentLogLevel)
+            if (logLevel < _currentLogLevel)
             {
                 return;
             }
@@ -203,6 +212,16 @@ namespace LHLauncher
             StartSslListener();
         }
         
+        private string GetRegistryValueOrDefault(RegistryKey baseRegistryKey, string valueName, string defaultValue)
+        {
+            // GetValue can return null, hence we use the null-conditional operator to safely access the ToString method.
+            // The null-coalescing operator will then return the defaultValue if the result is null (either from a null value or an empty string).
+            var value = baseRegistryKey.GetValue(valueName, null)?.ToString() ?? defaultValue;
+    
+            // If the resulting string is not null or empty, return it; otherwise, return the default value.
+            return string.IsNullOrEmpty(value) ? defaultValue : value;
+        }
+        
         private void LoadConfiguredPrograms()
         {
 
@@ -219,6 +238,54 @@ namespace LHLauncher
                 Log("No configured programs found.");
                 return;
             }
+            
+            
+
+            var collection = new List<string>();
+            collection.Add("MisconfiguredAppMessage");
+            collection.Add("FailedLaunchMessage");
+            collection.Add("GeneralFailureMessage");
+            collection.Add("SuccessfulLaunchMessage");
+
+            foreach (var errorKeyName in collection)
+            {
+                try
+                {
+                    string defaultValue = errorKeyName switch
+                    {
+                        "MisconfiguredAppMessage" => "The Program {ProgramName} is not configured correctly. <br/>Please check the registry settings.",
+                        "FailedLaunchMessage" => "The Program {ProgramName} did not start successfully. <br/>Please check the registry settings.",
+                        "GeneralFailureMessage" => "There was an error when running {ProgramName}.<br/> Error: ",
+                        "SuccessfulLaunchMessage" => "Executed {ProgramName} successfully.",
+                        _ => throw new InvalidOperationException("Unknown error key name.")
+                    };
+
+                    var message = GetRegistryValueOrDefault(baseRegistryKey, errorKeyName, defaultValue);
+
+                    switch (errorKeyName)
+                    {
+                        case "MisconfiguredAppMessage":
+                            _misconfiguredProgramMessageFromRegistry = message;
+                            break;
+                        case "FailedLaunchMessage":
+                            _failedLaunchMessageFromRegistry = message;
+                            break;
+                        case "GeneralFailureMessage":
+                            _generalFailureMessageFromRegistry = message;
+                            break;
+                        case "SuccessfulLaunchMessage":
+                            _successfulLaunchMessageFromRegistry = message;
+                            break;
+                    }
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                    throw;
+                }
+            }
+
+            
 
             try
             {
@@ -227,18 +294,18 @@ namespace LHLauncher
                 {
                     if (newLogLevel.ToString() == "Debug")
                     {
-                        currentLogLevel = LogLevel.Debug;
+                        _currentLogLevel = LogLevel.Debug;
                     }
                     else
                     {
-                        currentLogLevel = LogLevel.Info;
+                        _currentLogLevel = LogLevel.Info;
                     }
                 }
             }
             catch (Exception e)
             {
-                currentLogLevel = LogLevel.Info;
-                Log($"LogLevel not set in the registry, defaulting to {currentLogLevel}. Error: {e.Message}", LogLevel.Debug);
+                _currentLogLevel = LogLevel.Info;
+                Log($"LogLevel not set in the registry, defaulting to {_currentLogLevel}. Error: {e.Message}", LogLevel.Debug);
             }
 
             lock (_programsLock)
@@ -319,7 +386,8 @@ namespace LHLauncher
 
             foreach (ConfiguredProgram program in _programs)
             {
-                if (program.IsValid)
+                if (program != null)
+                // if (program.IsValid)
                 {
                     var urlToOpen = "https://" + GetHostNameForCertificate() + "/" + program.ProgramName;
                     htmlBuilder.AppendFormat("<tr><td>{0}</td><td>{1}</td><td>{2}</td><td><a href='javascript:void(0)' onclick='openInNewTab(\"{3}\")'>Open {0}</a></td></tr>", program.ProgramName, program.ProcessToVerify, program.CommandToRun, urlToOpen);
@@ -523,16 +591,17 @@ namespace LHLauncher
                 switch (didRun)
                 {
                     case "NotValid":
-                        SendResponse(writer, $"Program {requestedProgram.ProgramName} is not configured correctly. Please check the registry settings.", HttpStatusCode.BadRequest);
+                        // SendResponse(writer, $"Program {requestedProgram.ProgramName} is not configured correctly. Please check the registry settings.", HttpStatusCode.BadRequest);
+                        SendResponse(writer, _misconfiguredProgramMessageFromRegistry!.Replace("{ProgramName}", requestedProgram.ProgramName), HttpStatusCode.BadRequest);
                         break;
                     case "NotRunning":
-                        SendResponse(writer, $"Program {requestedProgram.ProgramName} did not start successfully. Please check the registry settings.", HttpStatusCode.InternalServerError);
+                        SendResponse(writer, _failedLaunchMessageFromRegistry!.Replace("{ProgramName}",requestedProgram.ProgramName), HttpStatusCode.InternalServerError);
                         break;
                     case "OK":
-                        SendResponse(writer, $"Executed {requestedProgram.ProgramName} successfully.", HttpStatusCode.OK, true); // Here we set the closeBrowser parameter to true.
+                        SendResponse(writer, _successfulLaunchMessageFromRegistry!.Replace("{ProgramName}",requestedProgram.ProgramName), HttpStatusCode.OK, true); // Here we set the closeBrowser parameter to true.
                         break;
                     default:
-                        SendResponse(writer, $"There was an error when running {requestedProgram.ProgramName}.<br/> Error: {didRun}", HttpStatusCode.InternalServerError); 
+                        SendResponse(writer, _generalFailureMessageFromRegistry!.Replace("{ProgramName}",requestedProgram.ProgramName) + didRun, HttpStatusCode.InternalServerError); 
                         break;
                 }
             }
@@ -725,32 +794,6 @@ namespace LHLauncher
             
             if (commandToRun != null)
             {
-                // Log($"Checking if {commandToRun} is a .lnk file...", LogLevel.Debug);
-                //
-                // if (Path.GetExtension(commandToRun).ToLower() == ".lnk" || Path.GetExtension(commandToRun[1..^1]).ToLower() == ".lnk")
-                // {
-                //     try 
-                //     {
-                //         Log($"Attempting to resolve .lnk file {commandToRun}", LogLevel.Debug);
-                //         ShellLink link;
-                //         if (Path.GetExtension(commandToRun).ToLower() == ".lnk")
-                //         {
-                //             link = new ShellLink(commandToRun);
-                //         }
-                //         else
-                //         {
-                //             link = new ShellLink(commandToRun[1..^1]);
-                //         }
-                //
-                //         commandToRun = $"\"{link.Target}\" {link.Arguments}";
-                //         Log($"New command to run fom Link: {commandToRun}", LogLevel.Debug);
-                //     }
-                //     catch (Exception ex) 
-                //     {
-                //         Log($"Error while processing the .lnk file: {ex.Message}");
-                //         return $"There was an error while processing the .lnk file: {ex.Message}";
-                //     }
-                // }
                 
                 commandToRun = CheckIfLinkAndParse(commandToRun);
                 
@@ -876,12 +919,88 @@ namespace LHLauncher
 
             if (certCollection.Count > 0)
             {
-                return certCollection[0]; // Return the first certificate, if found
-            }
-            Log("Certificate not found.", LogLevel.Debug);
-            return null; // Or handle this more gracefully
+                // Return the first certificate, if found
+                X509Certificate2 cert = certCollection[0];
 
+                // Check for expiration
+                if (DateTime.Now > cert.NotAfter || DateTime.Now < cert.NotBefore)
+                {
+                    Log("The certificate is expired or not yet valid.");
+                    return null;
+                }
+
+                // Build the certificate chain
+                X509Chain chain = new X509Chain();
+
+                // Enable CRL checking
+                chain.ChainPolicy.RevocationMode = X509RevocationMode.Online;
+                chain.ChainPolicy.RevocationFlag = X509RevocationFlag.ExcludeRoot;
+                
+                bool chainBuilt = chain.Build(cert);
+
+                if (!chainBuilt)
+                {
+                    bool crlNotFound = chain.ChainStatus.Any(status => status.Status == X509ChainStatusFlags.RevocationStatusUnknown);
+                    bool certificateRevoked = chain.ChainStatus.Any(status => status.Status == X509ChainStatusFlags.Revoked);
+    
+                    if (crlNotFound)
+                    {
+                        Log("CRL not found. Proceeding anyway, but this should be investigated.");
+                    }
+    
+                    if (certificateRevoked)
+                    {
+                        Log("The certificate has been revoked.");
+                        return null;
+                    }
+    
+                    if (!crlNotFound)
+                    {
+                        Log("The certificate chain could not be built for unknown reasons.");
+                        return null;
+                    }
+                }
+
+                // Disallow self-signed certificates by checking the chain length
+                if (chain.ChainElements.Count <= 1)
+                {
+                    Log("The certificate is self-signed, which is not allowed.");
+                    return null;
+                }
+
+                // Check certificate purpose
+                bool hasServerAuthEku = false;
+                foreach (var extension in cert.Extensions)
+                {
+                    if (extension is X509EnhancedKeyUsageExtension eku)
+                    {
+                        var serverAuthOid = new Oid("1.3.6.1.5.5.7.3.1"); // OID for Server Authentication
+                        foreach (Oid oid in eku.EnhancedKeyUsages)
+                        {
+                            if (oid.Value == serverAuthOid.Value)
+                            {
+                                hasServerAuthEku = true;
+                                break;
+                            }
+                        }
+
+                        if (!hasServerAuthEku)
+                        {
+                            Log("The certificate is not intended for SSL server authentication.");
+                            return null;
+                        }
+                    }
+                }
+
+                // If it passed all the checks, return the certificate
+                return cert;
+            }
+
+            Log("Certificate not found.");
+            return null; // Or handle this more gracefully
         }
+
+
 
         
     }

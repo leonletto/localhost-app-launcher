@@ -7,7 +7,7 @@
         <UseWindowsForms>true</UseWindowsForms>
         <ImplicitUsings>enable</ImplicitUsings>
         <ApplicationIcon>LHLauncher.ico</ApplicationIcon>
-        <Version>1.1.0</Version>
+        <Version>1.2.0</Version>
         <Title>LocalHost App Launcher</Title>
         <Authors>Leon Letto</Authors>
         <IsPackable>false</IsPackable>
