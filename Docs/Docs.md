@@ -208,6 +208,36 @@ And in the Images area you can add the image icons of your choice so that the Ap
 
 Click Save and Assign to assign the application to your users.
 
+Configuring Custom messages
+===========================
+
+You can configure custom messages in the registry to be displayed to the user using the following values under Computer\HKEY_CURRENT_USER\SOFTWARE\LHLauncher:
+* Value Name: MisconfiguredAppMessage
+* * default value is: The Program {ProgramName} is not configured correctly. <br/>Please check the registry settings.
+* Value Name: FailedLaunchMessage
+* * default value is: The Program {ProgramName} did not start successfully. <br/>Please check the registry settings.
+* Value Name: GeneralFailureMessage
+* * default value is: There was an error when running {ProgramName}.<br/> Error:
+* Value Name: SuccessfulLaunchMessage
+* * default value is: Executed {ProgramName} successfully.
+
+These are String values and can be configured with any message you want. The {ProgramName} will be replaced with the name of the program that is configured.
+
+Example:
+
+![MessageRegistryValue.png](images%2FMessageRegistryValue.png)
+
+In this example I have added an html div to point to an image and set its size.
+
+`<strong>The Program</strong> {ProgramName} is not configured correctly. <br/>Please check the registry settings.    <div><img src="https://vmware.com/content/dam/digitalmarketing/vmware/en/images/company/vmware-logo-grey.svg.imgo.jpeg" style="width: 100px; height: auto;" /></div>`
+
+This will display the following message to the user:
+
+![ErrorWithHTML.png](images%2FErrorWithHTML.png)
+
+I caution you to test thoroughly if you use HTML in the message as it may not display correctly in all browsers.
+
+
 **Troubleshooting**
 
 If you have issues with the application not starting, you can check the logs in the C:\\ProgramData\\LHLauncher folder.
