@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
-    <Product Id="*" Name="LHLauncher" Version="1.2.0" Manufacturer="LeonLetto" Language="1033" UpgradeCode="d986e6af-b0fb-48a7-b9f5-dfd9dcc30086">
+    <Product Id="*" Name="LHLauncher" Version="1.3.0" Manufacturer="LeonLetto" Language="1033" UpgradeCode="d986e6af-b0fb-48a7-b9f5-dfd9dcc30086">
         <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
         <Icon Id="LHLauncherIcon" SourceFile="$(var.ReleaseDir)\LHLauncher.ico" />
         <Binary Id="LaunchPSScript" SourceFile="$(var.ReleaseDir)\LaunchLHLauncher.ps1" />
@@ -28,7 +28,7 @@
                 <Directory Id="INSTALLFOLDER" Name="LHLauncher">
                     <Component Id="RemoveLHLauncherDir" Guid="d7cce6ba-7af8-4f95-94ab-071950609493">
                         <RemoveFolder Id="INSTALLFOLDER" On="uninstall" />
-                        <RegistryValue Root="HKLM" Key="Software\[ProductName]" Name="installFolder" Type="string" Value="1" KeyPath="yes" />
+                        <RegistryValue Root="HKCU" Key="Software\[ProductName]" Name="installFolder" Type="string" Value="1" KeyPath="yes" />
                     </Component>
                     <Component Id="LHLauncherExe" Guid="0cf7f486-c833-4757-801c-fbba0039e6f6">
                         <File Id="LHLauncherExeFile" Source="$(var.ReleaseDir)\LHLauncher.exe" KeyPath="yes" />
@@ -54,6 +54,13 @@
                     <Component Id="BobsShellDll" Guid="be3105fc-9da7-4cbe-b7a2-08a5e160d50f">
                         <File Id="BobsShellDllFile" Source="$(var.ReleaseDir)\Bobs.Shell.dll" KeyPath="yes" />
                     </Component>
+<!--                    <Component Id="SystemManagementDll" Guid="f17aac8f-8c36-490e-a422-aa344dcc69d7">-->
+<!--                        <File Id="SystemManagementDllFile" Source="$(var.ReleaseDir)\System.Management.dll" KeyPath="yes" />-->
+<!--                    </Component>-->
+<!--                    <Component Id="SystemCodeDomDll" Guid="fc7545eb-c30e-4429-a0d2-2360ee5a2f9c">-->
+<!--                        <File Id="SystemCodeDomDllFile" Source="$(var.ReleaseDir)\System.CodeDom.dll" KeyPath="yes" />-->
+<!--                    </Component>-->
+                    
                     <Component Id="VersionRegistryEntries" Guid="66ef5b5a-ab32-4789-be55-7e5efaa679a1">
                         <RegistryValue Root="HKCU"
                                        Key="SOFTWARE\LHLauncher"
@@ -105,6 +112,8 @@
             <ComponentRef Id="LaunchAppPS" />
             <ComponentRef Id="VersionRegistryEntries" />
             <ComponentRef Id="BobsShellDll" />
+<!--            <ComponentRef Id="SystemManagementDll" />-->
+<!--            <ComponentRef Id="SystemCodeDomDll" />-->
         </ComponentGroup>
         
         <CustomAction Id="LaunchLHLauncher"

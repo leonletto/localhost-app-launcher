@@ -78,6 +78,7 @@ namespace LHLauncher
         
         public enum LogLevel
         {
+            Error,
             Debug,
             Info
         }
@@ -113,7 +114,7 @@ namespace LHLauncher
         private readonly NotifyIcon _trayIcon;
         
         private X509Certificate2? _serverCertificate;
-        private readonly List<ConfiguredProgram> _programs = new();
+        private List<ConfiguredProgram> _programs = new();
         
         // Add timer for reload
         private Timer _registryCheckTimer;
@@ -131,6 +132,10 @@ namespace LHLauncher
         private static extern uint SendInput(uint nInputs, ref INPUT pInputs, int cbSize);
 
         private const int SW_RESTORE = 9;
+        
+        private int _portNumber = 443;
+
+        private string _configHtml = string.Empty;
 
         private struct INPUT
         {
@@ -210,6 +215,8 @@ namespace LHLauncher
             // Start the HTTPS listener
             LoadConfiguredPrograms();
             StartSslListener();
+            
+            MonitorRegistryChanges();
         }
         
         private string GetRegistryValueOrDefault(RegistryKey baseRegistryKey, string valueName, string defaultValue)
@@ -220,6 +227,14 @@ namespace LHLauncher
     
             // If the resulting string is not null or empty, return it; otherwise, return the default value.
             return string.IsNullOrEmpty(value) ? defaultValue : value;
+        }
+        
+        
+        private void RefreshUI()
+        {
+            // Regenerate the HTML content with the updated list of programs
+            _configHtml = GenerateConfigHtml();
+            
         }
         
         private void LoadConfiguredPrograms()
@@ -238,6 +253,28 @@ namespace LHLauncher
                 Log("No configured programs found.");
                 return;
             }
+            
+            try
+            {
+                var portFromRegistry = baseRegistryKey.GetValue("Port", null)?.ToString();
+                if (!string.IsNullOrEmpty(portFromRegistry) && int.TryParse(portFromRegistry, out int port))
+                {
+                    if (port >= 1 && port <= 65535) // Validating port range
+                    {
+                        _portNumber = port;
+                    }
+                    else
+                    {
+                        Log("Invalid port number in registry. Using default port 443.", LogLevel.Debug);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Log($"Error reading port from registry: {e.Message}", LogLevel.Debug);
+                // Optionally, handle the exception more explicitly
+            }
+
             
             
 
@@ -307,6 +344,8 @@ namespace LHLauncher
                 _currentLogLevel = LogLevel.Info;
                 Log($"LogLevel not set in the registry, defaulting to {_currentLogLevel}. Error: {e.Message}", LogLevel.Debug);
             }
+            
+            var newPrograms = new List<ConfiguredProgram>();
 
             lock (_programsLock)
             {
@@ -323,7 +362,7 @@ namespace LHLauncher
                         Log($"commandToRun: {commandString}", LogLevel.Debug);
                         var (executable, arguments) = ParseCommand(commandString);
                         Log($"executable: {executable} arguments: {arguments}", LogLevel.Debug);
-                        
+
                         if (string.IsNullOrEmpty(executable) || !System.IO.File.Exists(executable))
                         {
                             if (!warningIssued) Log($"Executable for {commandString} does not exist");
@@ -331,9 +370,10 @@ namespace LHLauncher
                             warningIssued = true;
                         }
                     }
-                    
+
                     var processToVerifyTemp = (string?)subKey.GetValue("ProcessName", null);
                     processToVerifyTemp = processToVerifyTemp?.Trim('"').ToLower();
+
                     var program = new ConfiguredProgram
                     {
                         ProgramName = programName,
@@ -343,12 +383,56 @@ namespace LHLauncher
                                   !string.IsNullOrEmpty((string?)subKey.GetValue("ProcessName", null)) &&
                                   !isBadString
                     };
-                    _programs.RemoveAll(p => p.ProgramName == programName);
-                    _programs.Add(program);
+
+                    newPrograms.Add(program);
                 }
             }
+            
+            _programs = newPrograms;
+            
+            RefreshUI();
+        }
+        
+        
+        private Dictionary<string, object> _lastRegistryValues = new Dictionary<string, object>();
+
+        private void MonitorRegistryChanges()
+        {
+            // Initialize the timer to check the registry every 5 seconds.
+            _registryCheckTimer = new Timer(RegistryPollingCallback, null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
+            
         }
 
+        private void RegistryPollingCallback(object? state)
+        {
+            try
+            {
+                var baseRegistryKey = Registry.CurrentUser.OpenSubKey(@"Software\LHLauncher");
+                if (baseRegistryKey == null)
+                {
+                    Log("Registry key - HKEY_CURRENT_USER\\Software\\LHLauncher - not found.");
+                    return;
+                }
+
+                foreach (var valueName in baseRegistryKey.GetValueNames())
+                {
+                    var newValue = baseRegistryKey.GetValue(valueName);
+                    if (_lastRegistryValues.TryGetValue(valueName, out var oldValue))
+                    {
+                        if (!Equals(newValue, oldValue))
+                        {
+                            Log($"Change detected in registry for key {valueName}.", LogLevel.Debug);
+                            LoadConfiguredPrograms();
+                        }
+                    }
+                    _lastRegistryValues[valueName] = newValue;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Error while polling the registry: {ex.Message}", LogLevel.Error);
+            }
+        }
         
         private void ViewLog_Click(object? sender, EventArgs e)
         {
@@ -375,6 +459,10 @@ namespace LHLauncher
             htmlBuilder.Append("tr:hover { background-color: #f5f5f5; }");
             htmlBuilder.Append("</style>");
             htmlBuilder.Append("<script>");
+            htmlBuilder.Append(
+                "function refreshPage() {location.reload();}");
+            htmlBuilder.Append(
+                " setInterval(refreshPage, 5000);");
             htmlBuilder.Append("function openInNewTab(url) {");
             htmlBuilder.Append("  window.open(url, '_blank');}");
             htmlBuilder.Append("</script>");
@@ -388,26 +476,20 @@ namespace LHLauncher
             {
                 if (program != null)
                 // if (program.IsValid)
-                {
-                    var urlToOpen = "https://" + GetHostNameForCertificate() + "/" + program.ProgramName;
+                {   
+                    var urlToOpen = string.Empty;
+                    if (_portNumber == 443)
+                    {
+                        urlToOpen = "https://" + GetHostNameForCertificate() + "/" + program.ProgramName;
+                    }
+                    else
+                    {
+                        urlToOpen =  "https://" + GetHostNameForCertificate() + $":{_portNumber}/" + program.ProgramName;
+                    }
                     htmlBuilder.AppendFormat("<tr><td>{0}</td><td>{1}</td><td>{2}</td><td><a href='javascript:void(0)' onclick='openInNewTab(\"{3}\")'>Open {0}</a></td></tr>", program.ProgramName, program.ProcessToVerify, program.CommandToRun, urlToOpen);
                 }
                 
             }
-            // foreach (string programName in baseRegistryKey.GetSubKeyNames())
-            // {
-            //     using (var subkey = baseRegistryKey.OpenSubKey(programName))
-            //     {
-            //         if (subkey != null)
-            //         {
-            //             var commandToRun = (string?)subkey.GetValue("Command", null);
-            //             var processToVerify = (string?)subkey.GetValue("ProcessName", null);
-            //             if (string.IsNullOrEmpty(commandToRun) || string.IsNullOrEmpty(processToVerify)) continue;
-            //             var urlToOpen = "https://" + GetHostNameForCertificate() + "/" + programName;
-            //             htmlBuilder.AppendFormat("<tr><td>{0}</td><td>{1}</td><td>{2}</td><td><a href='javascript:void(0)' onclick='openInNewTab(\"{3}\")'>Open {0}</a></td></tr>", programName, processToVerify, commandToRun, urlToOpen);
-            //         }
-            //     }
-            // }
             htmlBuilder.Append("</tbody></table></body></html>");
             return htmlBuilder.ToString();
         }
@@ -418,7 +500,14 @@ namespace LHLauncher
             // string tempFilePath = Path.Combine(Path.GetTempPath(), "LHLauncherConfig.html");
             // File.WriteAllText(tempFilePath, configHtml);
             // Process.Start(new ProcessStartInfo("cmd", $"/c start {tempFilePath}") { CreateNoWindow = true });
-            Process.Start(new ProcessStartInfo("cmd", $"/c start https://localhost.com/config") { CreateNoWindow = true });
+            if (_portNumber == 443)
+            {
+                Process.Start(new ProcessStartInfo("cmd", $"/c start https://localhost.com/config") { CreateNoWindow = true });
+            }
+            else
+            {
+                Process.Start(new ProcessStartInfo("cmd", $"/c start https://localhost.com:{_portNumber}/config") { CreateNoWindow = true });
+            }
         }
 
 
@@ -607,9 +696,8 @@ namespace LHLauncher
             }
             else if (request.Contains("GET /config"))
             {
-                Log("Received request for config.");
-                var configHtml = GenerateConfigHtml();
-                SendResponse(writer, configHtml);
+                _configHtml = GenerateConfigHtml();
+                SendResponse(writer, _configHtml);
             }
             else if (request.Contains("GET /favicon.ico"))
             {
@@ -866,39 +954,50 @@ namespace LHLauncher
         
         private async void StartSslListener()
         {
+            string[] potentialHostNames = new string[] { "localhost", "localhost.com" };
             var hostName = (string?)Registry.GetValue(@"HKEY_CURRENT_USER\Software\LHLauncher", "hostName", null);
-            Log($"HostName: {hostName} if null, will try localhost.com", LogLevel.Debug);
-            if (string.IsNullOrEmpty(hostName))
+
+            // If a specific hostname is configured, prepend it to the list of potential hostnames
+            if (!string.IsNullOrEmpty(hostName))
             {
-                // check if its localhost
-                _serverCertificate = LoadCertificateFromStore("localhost");
-                if (_serverCertificate is null)
+                potentialHostNames = new[] { hostName }.Concat(potentialHostNames).ToArray();
+            }
+
+            foreach (var name in potentialHostNames)
+            {
+                // First try loading from the user store
+                _serverCertificate = LoadCertificateFromStore(name, StoreLocation.CurrentUser);
+
+                // If not found in user store, try system store
+                if (_serverCertificate == null)
                 {
-                    // check if its localhost.com
-                    _serverCertificate = LoadCertificateFromStore("localhost.com");
+                    _serverCertificate = LoadCertificateFromStore(name, StoreLocation.LocalMachine);
+                }
+
+                // If a certificate is found, break out of the loop
+                if (_serverCertificate != null)
+                {
+                    break;
                 }
             }
-            else
-            {
-                _serverCertificate = LoadCertificateFromStore(hostName);
-            }
+            
             Log($"Server Certificate Thumbprint : {_serverCertificate?.Thumbprint}", LogLevel.Debug);
             Log($"Server Certificate Subject: {_serverCertificate?.Subject}", LogLevel.Debug);
 
             
             if (_serverCertificate == null)
             {
-                Console.WriteLine("Certificate not found. Exiting...");
-                Log("Certificate not found. Exiting...");
+                Console.WriteLine("Certificate not found for any configured hostnames. Exiting...");
+                Log("Certificate not found for any configured hostnames. Exiting...");
                 return;
             }
-            var port = 443;
+
             // Listen on Localhost only
             var address = IPAddress.Parse("127.0.0.1");
-            TcpListener listener = new TcpListener(address, port);
+            TcpListener listener = new TcpListener(address, _portNumber);
             listener.Start();
-            Log($"Server Listening on {address} on port {port}...");
-            Console.WriteLine($"Server Listening on {address} on port {port}...");
+            Log($"Server Listening on {address} on port {_portNumber}...");
+            Console.WriteLine($"Server Listening on {address} on port {_portNumber}...");
 
             while (true)
             {
@@ -908,9 +1007,9 @@ namespace LHLauncher
         }
 
         
-        private X509Certificate2? LoadCertificateFromStore(string subjectName)
+        private X509Certificate2? LoadCertificateFromStore(string subjectName, StoreLocation location)
         {
-            X509Store store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
+            X509Store store = new X509Store(StoreName.My, location);
             store.Open(OpenFlags.ReadOnly);
 
             // Find the certificate with the specified subject name
