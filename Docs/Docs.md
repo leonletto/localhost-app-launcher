@@ -5,12 +5,15 @@ A system utility for Streamlined Application Launching from Workspace ONE Hub
 Introduction
 ============
 
-Workspace ONE Hub is the go-to platform for centralizing enterprise applications. To expand on its capabilities further, we give you Localhost App Launcher, which allows you to launch local applications like SaaS applications – e.g., From a URL.
+Workspace ONE Hub is the go-to platform for centralizing enterprise applications. To expand on its capabilities further, we give you Localhost App Launcher,
+which allows you to launch local applications like SaaS applications – e.g., From a URL.
 
 Introducing LHLauncher
 ======================
 
-LHLauncher is a utility designed to streamline the application launching process in a Windows environment. Integrated with Workspace ONE Hub, it offers a secure and efficient way to manage and launch locally installed applications from the hub and App Catalog. The utility enables a centralized approach to managing application settings by reading configurations from the Windows Registry. It also offers SSL/TCP communication capabilities to ensure secure interactions.
+LHLauncher is a utility designed to streamline the application launching process in a Windows environment. Integrated with Workspace ONE Hub, it offers a secure
+and efficient way to manage and launch locally installed applications from the hub and App Catalog. The utility enables a centralized approach to managing
+application settings by reading configurations from the Windows Registry. It also offers SSL/TCP communication capabilities to ensure secure interactions.
 
 Features
 ========
@@ -18,7 +21,8 @@ Features
 Dynamic Configuration
 ---------------------
 
-LHLauncher reads its configuration from the Windows Registry, making it highly flexible and easy to update. We include a sample sensor that you can use to configure these registry entries easily, all in one place.
+LHLauncher reads its configuration from the Windows Registry, making it highly flexible and easy to update. We include a sample sensor that you can use to
+configure these registry entries easily, all in one place.
 
 Process Verification
 --------------------
@@ -33,15 +37,20 @@ If the application doesn't start initially, LHLauncher will automatically retry.
 Logging
 -------
 
-LHLauncher includes a logging feature, making it easier to troubleshoot and maintain. Logs are stored in a pre-configured path or the application's current directory.
+LHLauncher includes a logging feature, making it easier to troubleshoot and maintain. Logs are stored in a pre-configured path or the application's current
+directory.
 
 How LHLauncher.exe Complements Workspace ONE Hub
 ================================================
 
-1.  **Simplified Configuration**: LHLauncher integration with the Windows Registry allows IT teams to pre-configure launch commands, further streamlining the user experience.
-2.  **Enhanced Reliability**: The process verification and retry mechanisms ensure that applications are reliably launched, adding another layer of robustness.
-3.  **Security**: LHLauncher uses a certificate published by you, which you configure for trust, so that all interactions are via SSL using your trusted certificates. It is hardcoded to listen only on 127.0.0.1, preventing anyone from calling it remotely.
-4.  **Ease of Deployment**: LHLauncher requires the installer, a certificate to be present on the device it is installing on, and the configuration registry entries. The installer zip file includes a sample PowerShell sensor, which can be deployed to configure the registry on the devices. By default, the application expects a certificate with a subject of localhost.com. The powershell script will also edit the windows hosts file to add that entry.
+1. **Simplified Configuration**: LHLauncher integration with the Windows Registry allows IT teams to pre-configure launch commands, further streamlining the
+   user experience.
+2. **Enhanced Reliability**: The process verification and retry mechanisms ensure that applications are reliably launched, adding another layer of robustness.
+3. **Security**: LHLauncher uses a certificate published by you, which you configure for trust, so that all interactions are via SSL using your trusted
+   certificates. It is hardcoded to listen only on 127.0.0.1, preventing anyone from calling it remotely.
+4. **Ease of Deployment**: LHLauncher requires the installer, a certificate to be present on the device it is installing on, and the configuration registry
+   entries. The installer zip file includes a sample PowerShell sensor, which can be deployed to configure the registry on the devices. By default, the
+   application expects a certificate with a subject of localhost.com. The powershell script will also edit the windows hosts file to add that entry.
 
 Usage: A Practical Example with Notepad.exe
 ===========================================
@@ -83,7 +92,6 @@ I have tested teh following application configurations showing the types of ways
 
 ![images/ExampleProgramConfigurations.png](images/ExampleProgramConfigurations.png)
 
-
 **Sample Log Output**
 
 When you execute these steps, the log file generated by LHLauncher might look something like this:
@@ -105,7 +113,8 @@ Steps to deploy LHLauncher
 Dependencies
 ------------
 
-LHLauncher is a C# Windows application built with .net runtime 6.0.21. This should be installed by Workspace ONE as a dependency application so that LHLauncher can automatically deploy it rather than have the user get prompted to install it when installing.
+LHLauncher is a C# Windows application built with .net runtime 6.0.21. This should be installed by Workspace ONE as a dependency application so that LHLauncher
+can automatically deploy it rather than have the user get prompted to install it when installing.
 
 Here is the link to download it from Microsoft:
 
@@ -148,13 +157,18 @@ Certificates:
 
 Next, you need to deploy your root CA certificate as a device profile.
 
-Then, deploy the Webserver Certificate as a user profile. The Web server certificate should have localhost.com as the subject, and also, please add just localhost as a SAN.
+Then, deploy the Webserver Certificate as a user profile. The Web server certificate should have localhost.com as the subject, and also, please add just
+localhost as a SAN.
 
 Here is a screenshot showing the web server certificate in the personal store which is verified up to the CA certificate.
 
 The CA certificate is deployed in the Computer - Trusted Root Certification Authorities store.
 
 ![images/certificatesDeployed.png](images/certificatesDeployed.png)
+
+Although this is shown in the user certificate store, in the latest version, you can also deploy the certificates in the Computer store and LHLauncher will find
+it and use it.
+
 
 Configuration Sensor
 ====================
@@ -173,8 +187,6 @@ The Execution context should be Current User
 
 ![images/newSensorStep3.png](images/newSensorStep3.png)
 
-
-
 The first section you need to modify is the array of applications you want to configure for the user:
 
 Here, I have configured notepad and calculator:
@@ -187,12 +199,28 @@ The next section to configure is the URL to your Workspace ONE Access App Catalo
 
 The default logging path is C:\\ProgramData\\LHLauncher. You can change that if you like: ![images/newSensorStep6.png](images/newSensorStep6.png)
 
-Finally, you can see where the windows hosts file is modified to ensure that localhost.com points to localhost at 127.0.0.1. This is to be compatible with the Workspace ONE Access App Catalog, which requires a fqdn for security.
+Set Host Name in the hosts file to localhost.com
+=================================================
+
+The filename for the sample powershell to set the hosts file is: setHostsEntry.ps1  You can use this or any other method to set the hosts file Entry.
+
+The sensor will add an entry to the hosts file to ensure that localhost.com points to localhost at 127.0.0.1
+
+Unlike the above configuration sensor, this must be run in system context so that it can edit the hosts file.
+
+This is to be compatible with the Workspace ONE Access App Catalog, which requires a fqdn for security.
+
+![images/hostsFile.png](images/hostsFile.png)
+
+This can be run as a script or can be added similarly to the above configuration sensor so it is checked regularly. However,
+it must be run in system context.
+
 
 Deploying LHLauncher.msi
 ========================
 
-The last step is to deploy the LHLauncher.msi as a standard MSI application. Because it is fully configured, there are just a couple of things you need to add to the standard configuration:
+The last step is to deploy the LHLauncher.msi as a standard MSI application. Because it is fully configured, there are just a couple of things you need to add
+to the standard configuration:
 
 You must add the Windows Desktop Runtime which you configured above as a dependency.
 
@@ -212,14 +240,19 @@ Configuring Custom messages
 ===========================
 
 You can configure custom messages in the registry to be displayed to the user using the following values under Computer\HKEY_CURRENT_USER\SOFTWARE\LHLauncher:
+
 * Value Name: MisconfiguredAppMessage
-* * default value is: The Program {ProgramName} is not configured correctly. <br/>Please check the registry settings.
+*
+    * default value is: The Program {ProgramName} is not configured correctly. <br/>Please check the registry settings.
 * Value Name: FailedLaunchMessage
-* * default value is: The Program {ProgramName} did not start successfully. <br/>Please check the registry settings.
+*
+    * default value is: The Program {ProgramName} did not start successfully. <br/>Please check the registry settings.
 * Value Name: GeneralFailureMessage
-* * default value is: There was an error when running {ProgramName}.<br/> Error:
+*
+    * default value is: There was an error when running {ProgramName}.<br/> Error:
 * Value Name: SuccessfulLaunchMessage
-* * default value is: Executed {ProgramName} successfully.
+*
+    * default value is: Executed {ProgramName} successfully.
 
 These are String values and can be configured with any message you want. The {ProgramName} will be replaced with the name of the program that is configured.
 
@@ -237,7 +270,6 @@ This will display the following message to the user:
 
 I caution you to test thoroughly if you use HTML in the message as it may not display correctly in all browsers.
 
-
 **Troubleshooting**
 
 If you have issues with the application not starting, you can check the logs in the C:\\ProgramData\\LHLauncher folder.
@@ -249,6 +281,8 @@ Set the String value to Debug for troubleshooting or Info to reset back to norma
 
 Final Words
 
-The application is set to launch when installed automatically, and it will start automatically if the user reboots or logs out and logs in. However, because the application is being installed in the system context, it may not run when first installed by the administrator, so please let your users know to either reboot at the end or launch the LHLauncher shortcut once you first deploy it.
+The application is set to launch when installed automatically, and it will start automatically if the user reboots or logs out and logs in. However, because the
+application is being installed in the system context, it may not run when first installed by the administrator, so please let your users know to either reboot
+at the end or launch the LHLauncher shortcut once you first deploy it.
 
 If you have questions or requests, please contact Leon Letto at VMware – [lettol@vmware.com](mailto:lettol@vmware.com). I’ll be happy to help however I can.
