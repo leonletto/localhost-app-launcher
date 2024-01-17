@@ -34,6 +34,19 @@ Retries
 
 If the application doesn't start initially, LHLauncher will automatically retry.
 
+Custom Port Option
+------------------
+
+LHLauncher can be configured to listen on a custom port, allowing you to use it alongside other applications that use port 443.  
+For this you need to add a registry entry under HKEY\_CURRENT\_USER\\SOFTWARE\\LHLauncher called port and set it to the port you want to use.
+
+![images/CustomPort.png](images/CustomPort.png)
+
+Note: you can add this to the configuration sensor rather than sending a separate configuration.
+You can use the same code that you see here to add the port
+
+![images/PortConfig.png](images/PortConfig.png)
+
 Logging
 -------
 

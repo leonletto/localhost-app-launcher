@@ -38,6 +38,9 @@ try {
     # Set the 'loggingPath' value for the base key
     Set-ItemProperty -Path $baseKeyPath -Name "loggingPath" -Value ""
 
+    # Set the 'port' value for the base key
+    Set-ItemProperty -Path $baseKeyPath -Name "port" -Value "444"
+
     # Set the 'ProductVersion' value for the base key
     Set-ItemProperty -Path $baseKeyPath -Name "ProductVersion" -Value "1.0.7"
     
