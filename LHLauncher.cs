@@ -106,7 +106,7 @@ namespace LHLauncher
 
             var loggingPath = GetLoggingPath();
             var logMessage = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [{fileName}:{lineNo}] {message}";
-            // Console.WriteLine(logMessage);
+            Console.WriteLine(logMessage);
             File.AppendAllText(loggingPath, logMessage + Environment.NewLine);
         }
 
@@ -214,9 +214,9 @@ namespace LHLauncher
 
             // Start the HTTPS listener
             LoadConfiguredPrograms();
+            MonitorRegistryChanges();
             StartSslListener();
             
-            MonitorRegistryChanges();
         }
         
         private string GetRegistryValueOrDefault(RegistryKey baseRegistryKey, string valueName, string defaultValue)
@@ -394,44 +394,101 @@ namespace LHLauncher
         }
         
         
-        private Dictionary<string, object> _lastRegistryValues = new Dictionary<string, object>();
+        private Dictionary<string, Dictionary<string, object>> _lastRegistryValues = new Dictionary<string, Dictionary<string, object>>();
 
-        private void MonitorRegistryChanges()
+private void MonitorRegistryChanges()
+{
+    // Initialize the timer to check the registry every 5 seconds.
+    Log("initializing timer");
+    _registryCheckTimer = new Timer(RegistryPollingCallback, null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
+}
+
+private void RegistryPollingCallback(object? state)
+{
+    Log("Checking for registry changes...");
+    try
+    {
+        var baseRegistryKey = Registry.CurrentUser.OpenSubKey(@"Software\LHLauncher");
+        if (baseRegistryKey == null)
         {
-            // Initialize the timer to check the registry every 5 seconds.
-            _registryCheckTimer = new Timer(RegistryPollingCallback, null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
-            
+            Log("Registry key - HKEY_CURRENT_USER\\Software\\LHLauncher - not found.");
+            return;
         }
 
-        private void RegistryPollingCallback(object? state)
+        // New approach: Use a dictionary to track both root and subkey values
+        var newRegistryValues = new Dictionary<string, Dictionary<string, object>>();
+
+        // Add root key values
+        newRegistryValues[""] = baseRegistryKey.GetValueNames().ToDictionary(name => name, name => baseRegistryKey.GetValue(name))!;
+
+        // Iterate through each subkey and store its values
+        foreach (var programName in baseRegistryKey.GetSubKeyNames())
         {
-            try
+            using var subKey = baseRegistryKey.OpenSubKey(programName);
+            if (subKey == null) continue;
+
+            var subKeyValues = subKey.GetValueNames().ToDictionary(name => name, name => subKey.GetValue(name));
+            newRegistryValues[programName] = subKeyValues!;
+        }
+
+        // Compare new values with old ones
+        bool changed = HasRegistryChanged(newRegistryValues, _lastRegistryValues);
+
+        // Update the last values
+        _lastRegistryValues = newRegistryValues;
+
+        if (changed)
+        {
+            Log("Change detected in registry. Reloading configured programs.", LogLevel.Debug);
+            LoadConfiguredPrograms();
+        }
+    }
+    catch (Exception ex)
+    {
+        Log($"Error while polling the registry: {ex.Message}", LogLevel.Error);
+    }
+}
+        
+        private bool HasRegistryChanged(Dictionary<string, Dictionary<string, object>> newValues, Dictionary<string, Dictionary<string, object>> oldValues)
+        {
+            // Check for new or removed keys (subkeys)
+            var allKeys = new HashSet<string>(newValues.Keys.Concat(oldValues.Keys));
+            foreach (var key in allKeys)
             {
-                var baseRegistryKey = Registry.CurrentUser.OpenSubKey(@"Software\LHLauncher");
-                if (baseRegistryKey == null)
+                // If a key is in one dictionary but not the other, it has been added or removed.
+                if (!newValues.ContainsKey(key) || !oldValues.ContainsKey(key))
                 {
-                    Log("Registry key - HKEY_CURRENT_USER\\Software\\LHLauncher - not found.");
-                    return;
+                    return true;
                 }
 
-                foreach (var valueName in baseRegistryKey.GetValueNames())
+                // Get the value dictionaries for the current key in both new and old values
+                var newVals = newValues[key];
+                var oldVals = oldValues[key];
+
+                // Check for new or removed values within this key
+                var allValueNames = new HashSet<string>(newVals.Keys.Concat(oldVals.Keys));
+                foreach (var valueName in allValueNames)
                 {
-                    var newValue = baseRegistryKey.GetValue(valueName);
-                    if (_lastRegistryValues.TryGetValue(valueName, out var oldValue))
+                    // If a valueName is in one dictionary but not the other, it has been added or removed.
+                    if (!newVals.ContainsKey(valueName) || !oldVals.ContainsKey(valueName))
                     {
-                        if (!Equals(newValue, oldValue))
-                        {
-                            Log($"Change detected in registry for key {valueName}.", LogLevel.Debug);
-                            LoadConfiguredPrograms();
-                        }
+                        return true;
                     }
-                    _lastRegistryValues[valueName] = newValue;
+
+                    // If the value for a valueName has changed, the registry has changed.
+                    // Note: Depending on the type of the values, you might need a more sophisticated comparison.
+                    // For simplicity, we use Equals here, but consider cases where values are arrays or other complex types.
+                    var newValue = newVals[valueName];
+                    var oldValue = oldVals[valueName];
+                    if (!Equals(newValue, oldValue))
+                    {
+                        return true;
+                    }
                 }
             }
-            catch (Exception ex)
-            {
-                Log($"Error while polling the registry: {ex.Message}", LogLevel.Error);
-            }
+
+            // If we get here, no changes have been detected.
+            return false;
         }
         
         private void ViewLog_Click(object? sender, EventArgs e)
