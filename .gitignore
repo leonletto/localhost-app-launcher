@@ -6,3 +6,5 @@ obj/
 riderModule.iml
 /_ReSharper.Caches/
 DocumentationNext.md
+
+.DS_Store

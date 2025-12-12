@@ -60,7 +60,8 @@ How LHLauncher.exe Complements Workspace ONE Hub
    user experience.
 2. **Enhanced Reliability**: The process verification and retry mechanisms ensure that applications are reliably launched, adding another layer of robustness.
 3. **Security**: LHLauncher uses a certificate published by you, which you configure for trust, so that all interactions are via SSL using your trusted
-   certificates. It is hardcoded to listen only on 127.0.0.1, preventing anyone from calling it remotely.
+   certificates. It is hardcoded to listen only on 127.0.0.1, preventing anyone from calling it remotely. For detailed security architecture, threat model,
+   and compliance information, see [Security Considerations](Security.md).
 4. **Ease of Deployment**: LHLauncher requires the installer, a certificate to be present on the device it is installing on, and the configuration registry
    entries. The installer zip file includes a sample PowerShell sensor, which can be deployed to configure the registry on the devices. By default, the
    application expects a certificate with a subject of localhost.com. The powershell script will also edit the windows hosts file to add that entry.
